@@ -9,9 +9,29 @@ from PyQt5.QtWidgets import QFileDialog, QMessageBox, QDialog
 from PyQt5.QtCore import Qt
 
 class ExportMixin:
+    def _csv_save_start_dir(self, data_default_dir=""):
+        """Return the session-only CSV save directory.
+
+        The first save after application startup uses the current data folder.
+        Once the user successfully saves elsewhere, that folder is offered for
+        subsequent CSV saves during the same application session.
+        """
+        remembered = str(getattr(self, "_last_csv_save_dir", "") or "").strip()
+        return remembered or str(data_default_dir or "")
+
+    def _remember_csv_save_path(self, file_path):
+        """Remember a successful CSV save directory for this app session only."""
+        try:
+            directory = os.path.dirname(os.path.abspath(str(file_path)))
+        except Exception:
+            directory = ""
+        if directory:
+            self._last_csv_save_dir = directory
+
     def _csv_save_dialog(self, title, default_dir="", default_filename=""):
         """Non-fullscreen save dialog for CSV."""
-        dlg = QFileDialog(self, title, default_dir)
+        start_dir = self._csv_save_start_dir(default_dir)
+        dlg = QFileDialog(self, title, start_dir)
         dlg.setOption(QFileDialog.DontUseNativeDialog, True)
         dlg.setAcceptMode(QFileDialog.AcceptSave)
         dlg.setFileMode(QFileDialog.AnyFile)
@@ -23,7 +43,10 @@ class ExportMixin:
             dlg.selectFile(default_filename)
         if dlg.exec_() == QDialog.Accepted:
             files = dlg.selectedFiles()
-            return files[0] if files else ""
+            path = files[0] if files else ""
+            if path:
+                self._remember_csv_save_path(path)
+            return path
         return ""
 
     def _csv_open_dialog(self, title, default_dir=""):
@@ -439,6 +462,7 @@ class ExportMixin:
             file_id_part = "entries" + "_".join(e.replace('entry','') for e in entries_sorted)
 
         default_name = f"ProcessedScan_for_{file_id_part}.csv"
+        default_dir = self._csv_save_start_dir(default_dir)
         default_path = os.path.join(default_dir, default_name)
 
         save_path, _ = QFileDialog.getSaveFileName(
@@ -446,6 +470,7 @@ class ExportMixin:
         )
         if not save_path:
             return
+        self._remember_csv_save_path(save_path)
 
 # ---
         # 2.  Get arrays + post-norm mode

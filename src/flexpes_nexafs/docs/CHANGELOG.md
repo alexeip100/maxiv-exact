@@ -5,6 +5,18 @@
 
 ---
 
+## [2.4.4] – 2026-09-07
+
+### Added
+- Updated the FlexPES XAS application icon and added the same logo to the **About** dialog.
+- Added platform-specific icon assets for Windows, macOS, and Linux; on Windows 11 the running app now uses the dedicated FlexPES icon reliably in the taskbar.
+
+### Fixed
+- CSV export now remembers the last folder chosen during the current session; after restarting the app, the default returns to the loaded data folder.
+- **Plotted Data** waterfall curves and legend entries now follow the same top-to-bottom order.
+- **Processed Data → Pass** now remains enabled whenever exactly one processed curve is selected.
+- Fixed a macOS/PyQt5 crash when opening **Processed Data** with spectra whose Matplotlib colors are represented as RGB/RGBA tuples.
+
 ## [2.4.3] – 2026-08-27
 
 ### Added

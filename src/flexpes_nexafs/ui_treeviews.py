@@ -15,6 +15,44 @@ from PyQt5.QtGui import QPixmap, QColor, QIcon
 from PyQt5.QtWidgets import QTreeWidgetItem
 
 
+def _qcolor_from_curve_color(color):
+    """Convert Matplotlib/Qt color values to a valid QColor.
+
+    Matplotlib may return named/hex strings, QColor objects, or RGB/RGBA
+    tuples (including NumPy scalar values).  Passing a tuple directly to
+    QColor is not supported by PyQt5 on all platforms.
+    """
+    if isinstance(color, QColor):
+        return QColor(color)
+    if isinstance(color, str):
+        qcolor = QColor(color)
+        return qcolor if qcolor.isValid() else QColor()
+    if isinstance(color, (tuple, list, np.ndarray)):
+        try:
+            values = [float(v) for v in color]
+        except Exception:
+            return QColor()
+        if len(values) not in (3, 4):
+            return QColor()
+        try:
+            # Matplotlib normally uses 0..1 floats, but also accept 0..255 RGB(A).
+            if all(0.0 <= v <= 1.0 for v in values):
+                if len(values) == 3:
+                    return QColor.fromRgbF(values[0], values[1], values[2])
+                return QColor.fromRgbF(values[0], values[1], values[2], values[3])
+            ints = [max(0, min(255, int(round(v)))) for v in values]
+            if len(ints) == 3:
+                return QColor(ints[0], ints[1], ints[2])
+            return QColor(ints[0], ints[1], ints[2], ints[3])
+        except Exception:
+            return QColor()
+    try:
+        qcolor = QColor(color)
+        return qcolor if qcolor.isValid() else QColor()
+    except Exception:
+        return QColor()
+
+
 class TreeViewMixin:
     """Mixin for managing the Raw/Processed curve QTreeWidgets."""
 
@@ -197,9 +235,12 @@ class TreeViewMixin:
                         color = self.get_line_color_for_key(key, self.raw_ax)
                     except Exception:
                         pass
-                    if color:
-                        pixmap = QPixmap(16, 16); pixmap.fill(QColor(color))
-                        child.setIcon(0, QIcon(pixmap))
+                    if color is not None:
+                        qcolor = _qcolor_from_curve_color(color)
+                        if qcolor.isValid():
+                            pixmap = QPixmap(16, 16)
+                            pixmap.fill(qcolor)
+                            child.setIcon(0, QIcon(pixmap))
                     region_item.addChild(child)
                 self.raw_tree.addTopLevelItem(region_item)
                 region_item.setExpanded(True)
@@ -286,9 +327,12 @@ class TreeViewMixin:
                         color = self.get_line_color_for_key(key, self.proc_ax)
                     except Exception:
                         pass
-                    if color:
-                        pixmap = QPixmap(16, 16); pixmap.fill(QColor(color))
-                        child.setIcon(0, QIcon(pixmap))
+                    if color is not None:
+                        qcolor = _qcolor_from_curve_color(color)
+                        if qcolor.isValid():
+                            pixmap = QPixmap(16, 16)
+                            pixmap.fill(qcolor)
+                            child.setIcon(0, QIcon(pixmap))
                     region_item.addChild(child)
                 self.proc_tree.addTopLevelItem(region_item)
                 region_item.setExpanded(True)

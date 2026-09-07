@@ -1,12 +1,12 @@
 from pathlib import Path
 
 
-def test_version_metadata_is_243():
+def test_version_metadata_is_244():
     pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
     init = Path("src/flexpes_nexafs/__init__.py").read_text(encoding="utf-8")
-    assert 'version = "2.4.3"' in pyproject
-    assert '__version__ = "2.4.3"' in init
-    assert '__date__ = "2026-08-27"' in init
+    assert 'version = "2.4.4"' in pyproject
+    assert '__version__ = "2.4.4"' in init
+    assert '__date__ = "2026-09-07"' in init
 
 
 def test_hdf5_locking_is_set_before_h5py_import():
@@ -53,8 +53,8 @@ def test_grid_handler_accepts_programmatic_default_call():
 def test_whats_new_subheadings_are_rendered_without_raw_hash_markers():
     from flexpes_nexafs.utils.help_text import get_whats_new_payload
 
-    html, latest = get_whats_new_payload(current_version="2.4.3", max_versions=1)
-    assert latest == "2.4.3"
+    html, latest = get_whats_new_payload(current_version="2.4.4", max_versions=1)
+    assert latest == "2.4.4"
     assert "####" not in html
     assert "changelog-subheading" in html
 

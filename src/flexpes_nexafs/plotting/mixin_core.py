@@ -227,7 +227,20 @@ class CorePlottingMixin:
     def update_pass_button_state(self):
         try:
             cond_sum = bool(getattr(self, "chk_sum", None) and self.chk_sum.isChecked())
-            vc = self.visible_curves_count()
+
+            # Count only curves that are actually part of the current Processed Data
+            # selection. ``raw_visibility`` can retain stale/auxiliary keys, which used
+            # to make Pass appear disabled even when exactly one processed curve was
+            # checked.
+            try:
+                if hasattr(self, "_visible_processed_keys"):
+                    vc = len(self._visible_processed_keys())
+                else:
+                    pdata = getattr(self, "plot_data", {}) or {}
+                    vis = getattr(self, "raw_visibility", {}) or {}
+                    vc = sum(1 for key in pdata if vis.get(key, False))
+            except Exception:
+                vc = self.visible_curves_count()
 
             group_cond = False
             try:
@@ -264,7 +277,18 @@ class CorePlottingMixin:
             "This is a Python-based GUI for browsing, pre-processing and plotting Near-Edge X-ray Absorption Fine Structure (NEXAFS) spectra stored in HDF5 files, "
             "as collected at the FlexPES beamline (MAX IV Laboratory)."
         )
-        QMessageBox.information(self, "About FlexPES NEXAFS Plotter", info_text)
+        box = QMessageBox(self)
+        box.setWindowTitle("About FlexPES NEXAFS Plotter")
+        box.setText(info_text)
+        try:
+            from flexpes_nexafs.icon import application_icon
+
+            pixmap = application_icon().pixmap(96, 96)
+            if not pixmap.isNull():
+                box.setIconPixmap(pixmap)
+        except Exception:
+            pass
+        box.exec_()
 
     
     def show_usage_info(self, md_filename: str = "usage_controls.md", window_title: str = "Usage — FlexPES NEXAFS Plotter"):

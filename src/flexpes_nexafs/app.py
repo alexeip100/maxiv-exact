@@ -27,12 +27,33 @@ except Exception as exc:  # pragma: no cover
     ) from exc
 
 
+def _set_windows_app_user_model_id() -> None:
+    """Give Windows a stable identity for taskbar grouping and icon selection."""
+    import sys
+
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "MAXIV.FlexPES.NEXAFS"
+        )
+    except Exception:
+        # Icon setup should never prevent the application from starting.
+        pass
+
+
 def main():
     import sys
 
+    # Windows must receive the application identity before QApplication/window
+    # creation; otherwise the taskbar can inherit python.exe's generic icon.
+    _set_windows_app_user_model_id()
+
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
 
-    from .icon import application_icon
+    from .icon import application_icon, apply_windows_native_window_icon
     icon = application_icon()
     if not icon.isNull():
         app.setWindowIcon(icon)
@@ -70,6 +91,14 @@ def main():
 
     win = MainWindow()
     win.show()
+
+    # On Windows, set the native HWND icons explicitly.  This avoids Explorer
+    # falling back to python.exe's generic icon for the active taskbar button.
+    apply_windows_native_window_icon(win)
+    try:
+        QtCore.QTimer.singleShot(0, lambda: apply_windows_native_window_icon(win))
+    except Exception:
+        pass
 
 # Preload the decomposition UI and its heavy dependencies shortly after startup / so the first click on the "PCA" button feels responsive. This runs...
     def _preload_decomposition() -> None:

@@ -100,12 +100,15 @@ class WaterfallMixin:
         except Exception:
             step = 0.0
 
-        # Apply offsets in order
+        # Apply offsets so the visual top-to-bottom order matches both the
+        # Plotted list and the legend: the first list/legend item is the top
+        # waterfall curve, the last item is the bottom curve.
         try:
+            n_curves = len(plotted_keys_in_order)
             for idx, key in enumerate(plotted_keys_in_order):
                 line = self.plotted_lines[key]
                 y = np.asarray(line.get_ydata(), dtype=float)
-                line.set_ydata(y + idx * step)
+                line.set_ydata(y + (n_curves - 1 - idx) * step)
         except Exception:
             pass
 
