@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from flexpes_nexafs.decomposition.mcr_als_core import (
+from maxiv_exact.decomposition.mcr_als_core import (
     align_mcr_solution_to_reference,
     component_bounds_are_trivial,
     estimate_local_concentration_stability,

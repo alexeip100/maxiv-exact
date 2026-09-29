@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from flexpes_nexafs import hdf5_loading as h5load
+from maxiv_exact import hdf5_loading as h5load
 
 
 def test_supported_hdf5_extensions_are_case_insensitive():

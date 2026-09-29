@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def _source(name: str) -> str:
-    root = Path(__file__).resolve().parents[1] / "src" / "flexpes_nexafs"
+    root = Path(__file__).resolve().parents[1] / "src" / "maxiv_exact"
     return (root / name).read_text(encoding="utf-8")
 
 
@@ -15,6 +15,6 @@ def test_clear_plotted_confirmation_matches_reference_behavior():
     src = _source("plotting/mixin_raw_plot.py")
     assert '"Clear plotted curves"' in src
     assert '"Do you want to clear all plotted curves?"' in src
-    assert "QMessageBox.Ok | QMessageBox.Cancel" in src
-    assert "QMessageBox.Cancel" in src
-    assert "if answer == QMessageBox.Ok:" in src
+    assert "QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel" in src
+    assert "QMessageBox.StandardButton.Cancel" in src
+    assert "if answer == QMessageBox.StandardButton.Ok:" in src

@@ -3,7 +3,7 @@ from pathlib import Path
 
 def _treeviews_source() -> str:
     root = Path(__file__).resolve().parents[1]
-    return (root / "src" / "flexpes_nexafs" / "ui_treeviews.py").read_text(encoding="utf-8")
+    return (root / "src" / "maxiv_exact" / "ui_treeviews.py").read_text(encoding="utf-8")
 
 
 def test_tree_icons_do_not_pass_matplotlib_tuple_directly_to_qcolor():

@@ -1,14 +1,14 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = (ROOT / "src" / "flexpes_nexafs" / "data.py").read_text(encoding="utf-8")
-UI = (ROOT / "src" / "flexpes_nexafs" / "ui.py").read_text(encoding="utf-8")
-WORKER = (ROOT / "src" / "flexpes_nexafs" / "hdf5_worker.py").read_text(encoding="utf-8")
+DATA = (ROOT / "src" / "maxiv_exact" / "data.py").read_text(encoding="utf-8")
+UI = (ROOT / "src" / "maxiv_exact" / "ui.py").read_text(encoding="utf-8")
+WORKER = (ROOT / "src" / "maxiv_exact" / "hdf5_worker.py").read_text(encoding="utf-8")
 
 
 def test_new_hdf5_files_are_scanned_in_separate_process():
     assert "process = QProcess(self)" in DATA
-    assert 'worker_args = ["-m", "flexpes_nexafs.hdf5_worker", *new_paths]' in DATA
+    assert 'worker_args = ["-m", "maxiv_exact.hdf5_worker", *new_paths]' in DATA
     assert 'QTimer.singleShot(0, lambda p=process, a=worker_args: p.start(sys.executable, a))' in DATA
     assert "process.readyReadStandardOutput.connect(self._read_hdf5_process_stdout)" in DATA
     assert "process.finished.connect(self._finish_hdf5_process_load)" in DATA
@@ -27,7 +27,7 @@ def test_redundant_drop_loading_status_removed():
 
 
 def test_overlapping_hdf5_loads_are_guarded():
-    assert "process is not None and process.state() != QProcess.NotRunning" in DATA
+    assert "process is not None and process.state() != QProcess.ProcessState.NotRunning" in DATA
     assert "An HDF5 file is already being loaded." in DATA
 
 

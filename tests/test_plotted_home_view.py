@@ -1,8 +1,8 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-GRID = ROOT / "src" / "flexpes_nexafs" / "plotting" / "mixin_grid_axes.py"
-RAW = ROOT / "src" / "flexpes_nexafs" / "plotting" / "mixin_raw_plot.py"
+GRID = ROOT / "src" / "maxiv_exact" / "plotting" / "mixin_grid_axes.py"
+RAW = ROOT / "src" / "maxiv_exact" / "plotting" / "mixin_raw_plot.py"
 
 
 def test_rescale_updates_matplotlib_home_view():
