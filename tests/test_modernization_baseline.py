@@ -1,7 +1,7 @@
 """Baseline contracts for the 2.5 modernization series.
 
 These tests protect the modernization contracts as the 2.5 series advances.
-The 2.5.0rc1 build continues the cleaned Python 3.14/current-dependency modernization baseline and must not regress to Qt5.
+The 2.5.0 build continues the cleaned Python 3.14/current-dependency modernization baseline and must not regress to Qt5.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ def test_root_and_packaged_changelogs_stay_identical():
     root_log = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
     packaged_log = (PKG / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")
     assert packaged_log == root_log
-    assert "## [2.5.0rc1] – 2026-09-29" in root_log
+    assert "## [2.5.0] – 2026-09-29" in root_log
 
 
 def test_bundled_channel_mapping_schema_is_valid():

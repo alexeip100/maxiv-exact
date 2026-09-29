@@ -5,16 +5,20 @@
 
 ---
 
-## [2.5.0rc1] – 2026-09-29
+## [2.5.0] – 2026-09-29
 
-### Release candidate
-- Frozen feature set for the 2.5.0 modernization/rebranding release candidate.
-- No intentional workflow, GUI, or scientific-processing changes relative to 2.5.0a10.
-- Finalized the Python 3.14 / PyQt6 baseline, EXACT branding, user Help, README, and application icon for release-candidate testing.
+### What changed since 2.4.4
+- Rebranded the application as **EXACT** — *Exploration of X-ray Absorption: Characterization and Treatment* — with the Python distribution renamed to `maxiv-exact` and the primary launcher changed to `exact`.
+- Modernized the runtime from PyQt5 to **PyQt6** and moved the supported environment to **Python 3.14** with current NumPy, SciPy, Matplotlib, h5py, pandas, scikit-learn, and Markdown versions.
+- Reworked the user-facing Help for clearer first-time orientation, more balanced workflow guidance, improved light/dark-theme presentation, and clearer coverage of channel setup, processing order, I₀ selection, references, troubleshooting, and decomposition workflows.
+- Added a full user-facing README with installation, startup, quick-start, channel-profile, reference-library, and decomposition guidance.
+- Refreshed the application identity and presentation, including the EXACT icon and About dialog.
+- Added migration and regression fixes required by PyQt6 while preserving the established HDF5 loading, XAS/NEXAFS processing, plotting, reference-library, and PCA/NMF/MCR-ALS workflows.
 
-### Testing
-- Full automated regression suite, source/test compilation, package build, stale-reference audit, and clean-package checks are required before release.
-- Manual full-workflow regression testing on representative HDF5 datasets remains the final gate before 2.5.0.
+### Compatibility
+- Existing HDF5/reference workflows remain compatible; no intentional scientific-processing algorithm changes were introduced in the 2.5 modernization.
+- The legacy `flexpes-nexafs` launcher is retained temporarily, and existing legacy channel-mapping settings are migrated to the new EXACT configuration location when needed.
+
 
 ## [2.5.0a10] – 2026-09-28
 

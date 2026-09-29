@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "maxiv-exact"
-version = "2.5.0rc1"
+version = "2.5.0"
 description = "MAX IV EXACT — Exploration of X-ray Absorption: Characterization and Treatment."
 readme = "README.md"
 requires-python = ">=3.14"

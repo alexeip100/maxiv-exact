@@ -6,6 +6,7 @@ Help files are shipped under docs/ (for example usage_controls.md).
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 
 def _pkg_root_path() -> Path | None:
@@ -463,6 +464,16 @@ def build_whats_new_markdown(current_version: str, max_versions: int = 5) -> tup
 
     versions_sorted.sort(key=lambda x: x[0], reverse=True)
     merged = [(tag, d, block) for _, tag, d, block in versions_sorted] + versions_unparsable
+
+    # User-facing What's new should describe public releases, not the internal
+    # alpha/RC sequence used to prepare them.  When the installed version is a
+    # stable release, hide pre-release changelog entries (a/b/rc tags) while
+    # retaining them in the full packaged changelog.
+    current_is_stable = re.fullmatch(r"v?\d+\.\d+\.\d+", str(current_version).strip()) is not None
+    if current_is_stable:
+        prerelease_tag = re.compile(r"^v?\d+\.\d+\.\d+(?:a|b|rc)\d+", re.I)
+        merged = [item for item in merged if not prerelease_tag.match(item[0])]
+
     top = merged[:max_versions]
 
     latest_version = top[0][0] if top else ""
@@ -485,7 +496,6 @@ def build_whats_new_markdown(current_version: str, max_versions: int = 5) -> tup
         # Demote headings inside each version block to avoid flooding the TOC.
         # Do it consistently for all same-level headings (e.g. "### Fixed" and "### Changed")
         # so equal-level headings render with equal font size.
-        import re
         content = re.sub(r"^###\s+", "#### ", content, flags=re.M)
         content = re.sub(r"^##\s+", "#### ", content, flags=re.M)
         out.append(content)
