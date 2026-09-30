@@ -34,11 +34,12 @@ def _format_changelog_subheading_html(title: str) -> str:
     safe = html.escape(str(title or "").strip())
     if not safe:
         return ""
+    c = _help_palette_colors()
     return (
         '<div class="changelog-subheading" '
         'style="margin:10px 0 4px 0; padding:3px 8px; '
-        'border-left:4px solid #8a8a8a; background-color:#f2f2f2; '
-        'font-weight:bold;">'
+        f'border-left:4px solid {c["mid"]}; background-color:{c["alternate"]}; '
+        f'color:{c["text"]}; font-weight:bold;">'
         f'{safe}</div>'
     )
 
@@ -469,7 +470,7 @@ def build_whats_new_markdown(current_version: str, max_versions: int = 5) -> tup
     # alpha/RC sequence used to prepare them.  When the installed version is a
     # stable release, hide pre-release changelog entries (a/b/rc tags) while
     # retaining them in the full packaged changelog.
-    current_is_stable = re.fullmatch(r"v?\d+\.\d+\.\d+", str(current_version).strip()) is not None
+    current_is_stable = re.fullmatch(r"v?\d+\.\d+\.\d+(?:\.post\d+)?", str(current_version).strip()) is not None
     if current_is_stable:
         prerelease_tag = re.compile(r"^v?\d+\.\d+\.\d+(?:a|b|rc)\d+", re.I)
         merged = [item for item in merged if not prerelease_tag.match(item[0])]

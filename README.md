@@ -9,6 +9,7 @@ Starting with the **2.5 series**, the same software continues under the **EXACT*
 ## Main capabilities
 
 - Load and inspect X-ray absorption data stored in HDF5 files.
+- Drag-and-drop HDF5 loading from the file tree or any main plotting area.
 - Work with the common detector channels used in FlexPES XAS/NEXAFS measurements, including **TEY**, **PEY**, **TFY**, **PFY**, and the corresponding **I₀** signal.
 - Use built-in or user-edited **channel profiles** to map HDF5 dataset names to the physical detector roles.
 - Browse raw curves, load detector groups, and send selected spectra to the processing workflow.
@@ -17,6 +18,8 @@ Starting with the **2.5 series**, the same software continues under the **EXACT*
 - Build and reuse a **reference spectrum library**.
 - Perform decomposition analysis with **PCA**, **NMF**, and **MCR-ALS** tools.
 - Export processed spectra and decomposition results for further analysis.
+- Persistent **System / Light / Dark** application themes and adjustable UI font size, with font-aware interface sizing.
+- Fast **Check all / Uncheck all** controls for the curve lists in Raw, Processed, and Plotted Data.
 
 ## Supported data format
 
@@ -88,9 +91,11 @@ python -m maxiv_exact
 2. Use **Open HDF5 files** to load one or more HDF5 data files.
 3. In the left file tree, explore the available scans and detector channels.
 4. Load a detector group such as **TEY**, **PEY**, **TFY**, or **PFY**, or use the group-loading controls to load all curves in a selected channel.
-5. Move selected spectra to the processing workflow and inspect how raw and processed representations differ.
+5. Use the right-hand curve trees/lists (or **Check all / Uncheck all**) to control visibility, then move selected spectra to the processing workflow and inspect how raw and processed representations differ.
 6. Choose an appropriate **I₀** signal and apply normalization/background options as needed.
 7. Compare the results in the plotting area, optionally using grouping, summation, references, or decomposition tools.
+
+Use the **⚙ Settings** button next to the main file controls to choose **System**, **Light**, or **Dark** theme and to enlarge the Qt interface font by +1 or +2 pt. These appearance settings are remembered between sessions; Matplotlib plot font sizes remain independent. Common control geometry and key tree/list minimum widths scale with the selected UI font size to avoid clipped labels.
 
 The built-in **Help** menu contains the detailed user guidance:
 

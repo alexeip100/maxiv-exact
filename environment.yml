@@ -1,4 +1,4 @@
-name: dev_plotter_qt6
+name: exact
 channels:
   - conda-forge
 dependencies:

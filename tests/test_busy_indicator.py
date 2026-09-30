@@ -12,7 +12,8 @@ def test_busy_indicator_is_below_hdf5_tree():
     right_panel_pos = UI.index("# Right panel: tab widget")
     assert tree_pos < busy_pos < right_panel_pos
     assert "diameter=26" in UI
-    assert "setFixedHeight(34)" in UI
+    assert 'setProperty("exact_ui_role", "busy_row")' in UI
+    assert "small_row_height" in (ROOT / "src" / "maxiv_exact" / "ui_metrics.py").read_text(encoding="utf-8")
 
 
 def test_busy_indicator_is_used_for_file_and_group_loading():

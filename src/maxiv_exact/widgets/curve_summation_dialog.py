@@ -225,7 +225,7 @@ class CurveSummationDialog(QDialog):
         mid.addLayout(right, 1)
         right.addWidget(QLabel("Summation groups"))
         hint_label = QLabel("Tip: Double-click a group name to edit.")
-        hint_label.setStyleSheet("color: #666;")
+        hint_label.setStyleSheet("color: palette(mid);")
         right.addWidget(hint_label)
         self.groups_tree = GroupsTree(self)
         right.addWidget(self.groups_tree, 1)

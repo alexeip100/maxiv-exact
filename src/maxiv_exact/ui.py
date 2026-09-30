@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTreeWidget, QVBoxLayout, QWidget, QPushButton, QLabel, QHBoxLayout, QTabWidget,
     QCheckBox, QComboBox, QSpinBox, QMessageBox, QSizePolicy, QSplitter,
     QListWidget, QMenu, QSlider, QDoubleSpinBox, QDialog,
-    QAbstractItemView)
+    QAbstractItemView, QToolButton)
 
 # ---- Compatibility shims (Phase 2b) ---- / ----------------------------------------
 from PyQt6.QtGui import QFont
@@ -31,8 +31,53 @@ from .channel_setup import ChannelConfigManager, ChannelSetupDialog
 from .widgets.busy_spinner import BusySpinner
 import re
 from .qt_helpers import is_checked_state
+from .appearance import current_appearance_config, apply_appearance_live, refresh_ui_metrics
+from .widgets.settings_dialog import SettingsDialog
 
 class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, ExportMixin, LibraryMixin, QMainWindow):
+
+    CURVE_SIDEBAR_FRACTION = 0.25
+
+    def _set_tree_all_checked(self, tree, checked: bool):
+        """Set all top-level curve groups checked/unchecked using existing tree handlers."""
+        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        if tree is None:
+            return
+        try:
+            for i in range(tree.topLevelItemCount()):
+                item = tree.topLevelItem(i)
+                if item is not None:
+                    item.setCheckState(0, state)
+        except Exception:
+            pass
+
+    def _set_plotted_all_checked(self, checked: bool):
+        """Show/hide all Plotted Data curves via their existing visibility checkboxes."""
+        try:
+            for i in range(self.plotted_list.count()):
+                item = self.plotted_list.item(i)
+                widget = self.plotted_list.itemWidget(item)
+                cb = getattr(widget, "visible_check", None) if widget is not None else None
+                if cb is not None:
+                    cb.setChecked(bool(checked))
+        except Exception:
+            pass
+
+    def _make_check_buttons(self, check_slot, uncheck_slot):
+        """Create a full-width two-button row for a curve tree/list sidebar."""
+        row_widget = QWidget()
+        row_widget.setProperty("exact_layout_role", "compact")
+        row = QHBoxLayout(row_widget)
+        row.setContentsMargins(0, 0, 0, 0)
+        check_btn = QPushButton("Check all")
+        uncheck_btn = QPushButton("Uncheck all")
+        check_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        uncheck_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        check_btn.clicked.connect(check_slot)
+        uncheck_btn.clicked.connect(uncheck_slot)
+        row.addWidget(check_btn, 1)
+        row.addWidget(uncheck_btn, 1)
+        return row_widget, check_btn, uncheck_btn
 
     def _begin_busy(self, message: str = "Working..."):
         """Show the file-panel activity indicator and allow Qt to repaint it."""
@@ -225,6 +270,12 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
             self._end_busy()
 
 
+    def show_settings(self):
+        """Open the compact global appearance settings dialog."""
+        dlg = SettingsDialog(current_appearance_config(), self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            apply_appearance_live(dlg.configuration())
+
     def _apply_basic_tooltips(self):
         """Assign helpful tooltips to buttons/checkboxes/comboboxes that lack one.
 
@@ -412,10 +463,20 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
 
         # Left panel: file tree and controls
         self.left_panel_widget = QWidget()
+        self.left_panel_widget.setProperty("exact_layout_role", "panel")
         self.left_panel = QVBoxLayout(self.left_panel_widget)
         self.splitter.addWidget(self.left_panel_widget)
 
         self.open_close_layout = QHBoxLayout()
+        self.settings_button = QToolButton()
+        self.settings_button.setText("⚙")
+        self.settings_button.setToolTip("Settings")
+        self.settings_button.setAccessibleName("Settings")
+        self.settings_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.settings_button.setProperty("exact_ui_role", "settings_button")
+        self.settings_button.clicked.connect(self.show_settings)
+        self.open_close_layout.addWidget(self.settings_button)
+
         self.open_button = QPushButton("Open HDF5")
         self.open_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.open_button.clicked.connect(self.open_file)
@@ -452,12 +513,9 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         # Channel mapping setup
         self.setup_channels_row = QHBoxLayout()
         self.setup_channels_button = QPushButton("Setup channels")
-        # Keep the button as narrow as possible (do not stretch to full width).
-        self.setup_channels_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        try:
-            self.setup_channels_button.setFixedWidth(self.setup_channels_button.sizeHint().width())
-        except Exception:
-            pass
+        # Keep the button compact, but let its sizeHint follow live font changes.
+        self.setup_channels_button.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        self.setup_channels_button.setProperty("exact_ui_role", "setup_channels_button")
         self.setup_channels_button.clicked.connect(self.on_setup_channels_clicked)
         self.setup_channels_row.addWidget(self.setup_channels_button)
 
@@ -470,7 +528,6 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.channel_profile_label.setWordWrap(False)
         self.channel_profile_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         # Keep label styling minimal so it follows the application's global font size.
-        self.channel_profile_label.setStyleSheet("color: #555;")
         self.setup_channels_row.addWidget(self.channel_profile_label)
 
         self.left_panel.addLayout(self.setup_channels_row)
@@ -480,6 +537,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.left_panel.addWidget(self.file_label)
 
         self.tree = QTreeWidget()
+        self.tree.setProperty("exact_ui_role", "main_tree")
         self.tree.setColumnCount(1)
         try:
             from PyQt6.QtWidgets import QHeaderView
@@ -510,6 +568,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         # Activity feedback for file/group loading. Kept below the file tree so the
         # already crowded controls above the tree remain unchanged.
         self.busy_row_widget = QWidget()
+        self.busy_row_widget.setProperty("exact_ui_role", "busy_row")
         self.busy_row_layout = QHBoxLayout(self.busy_row_widget)
         self.busy_row_layout.setContentsMargins(2, 2, 2, 2)
         self.busy_row_layout.setSpacing(7)
@@ -518,12 +577,12 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.busy_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.busy_row_layout.addWidget(self.busy_spinner)
         self.busy_row_layout.addWidget(self.busy_label)
-        self.busy_row_widget.setFixedHeight(34)
         self.busy_row_widget.hide()
         self.left_panel.addWidget(self.busy_row_widget)
 
         # Right panel: tab widget
         self.right_panel_widget = QWidget()
+        self.right_panel_widget.setProperty("exact_layout_role", "panel")
         self.right_panel = QVBoxLayout(self.right_panel_widget)
         self.splitter.addWidget(self.right_panel_widget)
 
@@ -562,6 +621,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         # --- Example-inspired: 'All in channel' checkbox + combo ---
         self.cb_all_in_channel = QCheckBox("All in channel:")
         self.combo_all_channel = QComboBox()
+        self.combo_all_channel.setProperty("exact_ui_role", "channel_combo")
         try: self.combo_all_channel.setMinimumWidth(150)
         except Exception: pass
         try: self.combo_all_channel.setSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
@@ -575,6 +635,8 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
 
         self.canvas_raw_fig, self.raw_ax = plt.subplots()
         self.canvas_raw = FigureCanvas(self.canvas_raw_fig)
+        self.canvas_raw.setAcceptDrops(True)
+        self.canvas_raw.installEventFilter(self)
         self.toolbar_raw = NavigationToolbar(self.canvas_raw, self.raw_left_widget)
         self.raw_left_layout.addWidget(self.toolbar_raw)
         self.raw_left_layout.addWidget(self.canvas_raw)
@@ -588,15 +650,28 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
 
         self.raw_splitter.addWidget(self.raw_left_widget)
         self.raw_tree = QTreeWidget()
+        self.raw_tree.setProperty("exact_ui_role", "raw_tree")
         try: self.raw_tree.setMinimumWidth(180)
         except Exception: pass
         try: self.raw_tree.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
         except Exception: pass
         self.raw_tree.setHeaderHidden(True)
         (self.raw_tree.itemChanged.connect( self.raw_tree_item_changed )) if hasattr(self, 'raw_tree_item_changed') else None
-        self.raw_splitter.addWidget(self.raw_tree)
-        self.raw_splitter.setStretchFactor(0, 32)
-        self.raw_splitter.setStretchFactor(1, 68)
+        self.raw_sidebar = QWidget()
+        self.raw_sidebar.setProperty("exact_ui_role", "curve_sidebar")
+        self.raw_sidebar.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
+        self.raw_sidebar_layout = QVBoxLayout(self.raw_sidebar)
+        self.raw_sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        self.raw_sidebar_layout.setSpacing(5)
+        self.raw_sidebar_layout.addWidget(self.raw_tree, 1)
+        self.raw_check_row, self.raw_check_all_button, self.raw_uncheck_all_button = self._make_check_buttons(
+            lambda: self._set_tree_all_checked(self.raw_tree, True),
+            lambda: self._set_tree_all_checked(self.raw_tree, False),
+        )
+        self.raw_sidebar_layout.addWidget(self.raw_check_row, 0)
+        self.raw_splitter.addWidget(self.raw_sidebar)
+        self.raw_splitter.setStretchFactor(0, 3)
+        self.raw_splitter.setStretchFactor(1, 1)
         self.data_tabs.addTab(self.raw_tab, "Raw Data")
 
 # ---
@@ -681,6 +756,8 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
 
         self.canvas_proc_fig, self.proc_ax = plt.subplots()
         self.canvas_proc = FigureCanvas(self.canvas_proc_fig)
+        self.canvas_proc.setAcceptDrops(True)
+        self.canvas_proc.installEventFilter(self)
         self.toolbar_proc = NavigationToolbar(self.canvas_proc, self.proc_left_widget)
         # Pre-edge marker dragging is handled via ProcessingMixin.on_press/on_motion/on_release
         # (same event pipeline as Manual BG anchors) for maximum robustness.
@@ -724,6 +801,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.proc_left_layout.addWidget(self.proc_controls_bottom, 0)
 
         self.proc_tree = QTreeWidget()
+        self.proc_tree.setProperty("exact_ui_role", "processed_tree")
         try: self.proc_tree.setMinimumWidth(200)
         except Exception: pass
         try: self.proc_tree.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
@@ -737,11 +815,28 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         except Exception:
             pass
 
+        self.proc_sidebar = QWidget()
+        self.proc_sidebar.setProperty("exact_ui_role", "curve_sidebar")
+        self.proc_sidebar.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
+        self.proc_sidebar_layout = QVBoxLayout(self.proc_sidebar)
+        self.proc_sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        self.proc_sidebar_layout.setSpacing(5)
+        # Keep the sidebar action row vertically aligned with the bottom
+        # controls in the corresponding left panel.  appearance.py refreshes
+        # this margin live when UI metrics/font settings change.
+        self.proc_sidebar._exact_bottom_margin_source = self.proc_left_widget
+        self.proc_sidebar_layout.addWidget(self.proc_tree, 1)
+        self.proc_check_row, self.proc_check_all_button, self.proc_uncheck_all_button = self._make_check_buttons(
+            lambda: self._set_tree_all_checked(self.proc_tree, True),
+            lambda: self._set_tree_all_checked(self.proc_tree, False),
+        )
+        self.proc_sidebar_layout.addWidget(self.proc_check_row, 0)
+
         self.proc_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.proc_splitter.addWidget(self.proc_left_widget)
-        self.proc_splitter.addWidget(self.proc_tree)
-        self.proc_splitter.setStretchFactor(0, 28)
-        self.proc_splitter.setStretchFactor(1, 72)
+        self.proc_splitter.addWidget(self.proc_sidebar)
+        self.proc_splitter.setStretchFactor(0, 3)
+        self.proc_splitter.setStretchFactor(1, 1)
 
         self.proc_tab_layout = QVBoxLayout(self.proc_tab)
         self.proc_tab_layout.addWidget(self.proc_splitter)
@@ -759,6 +854,8 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.plotted_ax.set_xlabel("Photon energy (eV)")
         self.plotted_ax.set_ylabel("XAS intensity (arb. units)")
         self.canvas_plotted = FigureCanvas(self.canvas_plotted_fig)
+        self.canvas_plotted.setAcceptDrops(True)
+        self.canvas_plotted.installEventFilter(self)
         try:
             self._plotted_hover_cid = self.canvas_plotted.mpl_connect("motion_notify_event", self._on_plotted_hover_hint)
         except Exception:
@@ -883,6 +980,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.plotted_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.plotted_splitter.addWidget(self.plot_left_widget)
         self.plotted_list = QListWidget()
+        self.plotted_list.setProperty("exact_ui_role", "plotted_list")
         try: self.plotted_list.setMinimumWidth(180)
         except Exception: pass
         try: self.plotted_list.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
@@ -891,7 +989,22 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.plotted_list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.plotted_list.setDragEnabled(True)
         self.plotted_list.setDropIndicatorShown(True)
-        self.plotted_splitter.addWidget(self.plotted_list)
+        self.plotted_sidebar = QWidget()
+        self.plotted_sidebar.setProperty("exact_ui_role", "curve_sidebar")
+        self.plotted_sidebar.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Expanding)
+        self.plotted_sidebar_layout = QVBoxLayout(self.plotted_sidebar)
+        self.plotted_sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        self.plotted_sidebar_layout.setSpacing(5)
+        # Match the bottom margin of the plotted-control panel so the
+        # Check/Uncheck row shares the same baseline as its controls.
+        self.plotted_sidebar._exact_bottom_margin_source = self.plot_left_widget
+        self.plotted_sidebar_layout.addWidget(self.plotted_list, 1)
+        self.plotted_check_row, self.plotted_check_all_button, self.plotted_uncheck_all_button = self._make_check_buttons(
+            lambda: self._set_plotted_all_checked(True),
+            lambda: self._set_plotted_all_checked(False),
+        )
+        self.plotted_sidebar_layout.addWidget(self.plotted_check_row, 0)
+        self.plotted_splitter.addWidget(self.plotted_sidebar)
         # Enable drag & drop reordering; replot on drop
         self.plotted_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.plotted_list.setDefaultDropAction(Qt.DropAction.MoveAction)
@@ -899,8 +1012,8 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
             self.plotted_list.model().rowsMoved.connect(lambda *args: self.on_plotted_list_reordered())
         except Exception:
             pass
-        self.plotted_splitter.setStretchFactor(0, 55)
-        self.plotted_splitter.setStretchFactor(1, 45)
+        self.plotted_splitter.setStretchFactor(0, 3)
+        self.plotted_splitter.setStretchFactor(1, 1)
         self.data_tabs.addTab(self.plotted_splitter, "Plotted Data")
 
 # ---
@@ -941,6 +1054,8 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
 
         # Tooltips: populate for buttons/checkboxes/comboboxes that lack one.
         self._apply_basic_tooltips()
+        # Apply current font-aware control geometry after the complete UI exists.
+        refresh_ui_metrics(QApplication.instance())
 
     def showEvent(self, event):
         """Set initial splitter proportions once the window is shown."""
@@ -966,11 +1081,11 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         except Exception:
             pass
 
-        # Tab splitters: widen the right-hand curve-tree widget vs previous defaults
+        # Keep the canvas/controls vs curve-list proportion identical on all three tabs.
         specs = [
-            ("raw_splitter", 0.62),     # wider curve tree on Raw tab
-            ("proc_splitter", 0.66),    # wider curve tree on Processed tab
-            ("plotted_splitter", 0.42)  # wider plotted list
+            ("raw_splitter", self.CURVE_SIDEBAR_FRACTION),
+            ("proc_splitter", self.CURVE_SIDEBAR_FRACTION),
+            ("plotted_splitter", self.CURVE_SIDEBAR_FRACTION),
         ]
         for name, right_frac in specs:
             try:
@@ -1246,8 +1361,8 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         except Exception:
             return False
 
-    def _handle_hdf5_tree_drag_event(self, event) -> bool:
-        """Accept drops of local HDF5 files onto the left HDF5 tree."""
+    def _handle_hdf5_file_drag_event(self, event) -> bool:
+        """Accept drops of local HDF5 files on supported EXACT drop targets."""
         try:
             paths = self._local_paths_from_mime_data(event.mimeData())
             has_local_paths = bool(paths)
@@ -1278,14 +1393,21 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         return False
 
     def eventFilter(self, obj, event):
-        """Route HDF5 file drag/drop events from the left tree to the shared loader."""
+        """Route HDF5 file drops from the tree or plotting canvases to one loader."""
         try:
             tree = getattr(self, "tree", None)
-            if tree is not None and obj in (tree, tree.viewport()):
-                if event.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
-                    handled = self._handle_hdf5_tree_drag_event(event)
-                    if handled:
-                        return True
+            drop_targets = {
+                target for target in (
+                    tree,
+                    tree.viewport() if tree is not None else None,
+                    getattr(self, "canvas_raw", None),
+                    getattr(self, "canvas_proc", None),
+                    getattr(self, "canvas_plotted", None),
+                ) if target is not None
+            }
+            if obj in drop_targets and event.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove, QEvent.Type.Drop):
+                if self._handle_hdf5_file_drag_event(event):
+                    return True
         except Exception:
             pass
         try:

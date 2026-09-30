@@ -689,7 +689,7 @@ class CorePlottingMixin:
                     "QTreeWidget {"
                     f" font-size: {px}px;"
                     " }"
-                    "QTreeWidget::item { color: #0066CC; }"
+                    "QTreeWidget::item { color: palette(link); }"
                     "QTreeWidget::item:selected { color: palette(text); }"
                 )
             except Exception:
@@ -920,6 +920,11 @@ class CorePlottingMixin:
                 pass
             self.original_line_data.clear()
         self.update_pass_button_state()
+        # A cleared session starts again from the Raw Data workflow.
+        try:
+            self.data_tabs.setCurrentIndex(0)
+        except Exception:
+            pass
 
 # ------------ Left tree interactions ------------ / (moved to plotting: toggle_plot)
 

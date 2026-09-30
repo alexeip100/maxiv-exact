@@ -61,14 +61,14 @@ These buttons control file loading and global reset actions.
 ## **Open HDF5**
 Opens one or more HDF5 files. Loaded files appear in the **HDF5 Structure** tree.
 
-You can also drag and drop one or more `.h5`/`.hdf5` files directly onto the **HDF5 Structure** tree. Invalid files are skipped with a warning.
+You can also drag and drop one or more `.h5`/`.hdf5` files directly onto the **HDF5 Structure** tree or onto any of the three main plotting areas (**Raw Data**, **Processed Data**, or **Plotted Data**). All drop targets use the same loader. Invalid files are skipped with a warning.
 
 If a file with the same file name is already loaded, the program asks whether to refresh it from disk. Refreshing is non-destructive: existing processed/plotted work is kept where possible, and newly appended curves are added to the tree.
 
 **Tip:** you can open multiple files at once; curves from all files can be selected and plotted together.
 
 ## **Close all**
-Closes *all* opened files and clears all loaded data, trees, and plots.
+Closes *all* opened files and clears all loaded data, trees, and plots. After the reset, EXACT returns to the **Raw Data** tab so the next session starts at the beginning of the normal workflow.
 
 **Also available:** close a *single* file:
 - In **HDF5 Structure**, right-click the top-level file item → **Close** (confirmation shown).
@@ -79,7 +79,7 @@ Resets the UI state without exiting the application. Typical effects:
 - clears current raw/processed selections and curves shown in plots,
 - resets processing controls.
 
-Opened files remain visible in the HDF5 tree, so you can reselect curves quickly.
+Opened files remain visible in the HDF5 tree, so you can reselect curves quickly. EXACT returns to the **Raw Data** tab after the reset.
 
 ## **Help**
 Opens:
@@ -121,6 +121,16 @@ This dialog defines how the application recognizes roles such as **TEY / PEY / T
 
 ---
 
+## Settings (⚙)
+The cog button next to **Open HDF5** opens the global appearance settings.
+
+- **Theme:** System, Light, or Dark.
+- **UI font size:** Default, +1 pt, or +2 pt. This changes Qt interface text, not Matplotlib plot/figure fonts.
+
+The choices are stored and restored the next time EXACT starts. When the UI font is enlarged, control heights, spacing, tab geometry, and important tree/list minimum widths are adjusted with it so labels remain readable.
+
+---
+
 ## HDF5 Structure (tree in left panel)
 This tree is for browsing the file contents and selecting specific datasets.
 
@@ -149,6 +159,8 @@ Each tab answers a different question:
 - *Processed:* “How do I transform it (normalization/background/sum)?”
 - *Plotted:* “How do I present/export it?”
 
+All three tabs use the same basic plot/sidebar layout. The vertical divider is draggable, but the curve sidebar keeps a minimum width large enough for its controls. Beneath each curve list/tree, **Check all** and **Uncheck all** provide a fast way to show or hide every curve in that tab.
+
 ---
 
 ## Raw Data tab
@@ -172,6 +184,9 @@ The dropdown lists unique channel names (last component of dataset paths).
 When enabled, changing the dropdown switches the active channel selection across entries.
 
 **When to use:** you want something else (I₀, energy, an encoder value, etc) across many entries.
+
+### Raw curve tree (right side)
+The right-hand tree groups loaded raw curves by energy region. Use the individual or region checkboxes for selective visibility, or use **Check all / Uncheck all** below the tree to toggle the complete Raw selection in one action.
 
 ### Raw plot
 - Matplotlib toolbar is shown above the raw plot (zoom, pan, save, etc).
@@ -264,6 +279,9 @@ Exports processed data to CSV. Works for individual curves, not a group. Group C
 
 **See also (How to):** *Make a single clean processed curve* and *Sum curves (“Sum up?” dialog)*
 
+### Processed curve tree (right side)
+The right-hand tree controls which processed curves are visible. **Check all / Uncheck all** below the tree toggles the whole processed set. The button row is aligned with the bottom processing controls.
+
 ### Background and post-normalization controls (bottom row)
 
 #### **Choose BG** — None / Auto / Manual
@@ -309,6 +327,7 @@ Selecting an item in the list makes that curve the “active” curve for certai
 
 **Tip:** If you want a consistent export order and legend order, set it here by reordering the curves before exporting.
 
+Use **Check all / Uncheck all** below the list to show or hide the complete plotted set without changing the curve order.
 
 ### Top row controls
 

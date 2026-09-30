@@ -49,35 +49,14 @@ def main():
     if not icon.isNull():
         app.setWindowIcon(icon)
 
-    # Import the main UI only after a QApplication exists.
+    # Apply persistent appearance preferences before constructing widgets.
+    # The baseline is captured first so "System" can restore the OS palette.
+    from .appearance import capture_application_baseline, apply_appearance
+    capture_application_baseline(app)
+    apply_appearance(app)
+
+    # Import the main UI only after a QApplication exists and styling is ready.
     from .ui import MainWindow
-
-    # Force a consistent cross-platform Qt style.
-    try:
-        app.setStyle("Fusion")
-    except Exception:
-        pass
-
-    # Use the style's standard palette as the default (light) palette.
-    try:
-        app.setPalette(app.style().standardPalette())
-    except Exception:
-        pass
-
-    # Preserve the system-selected font family and increase the default Qt
-    # application font by two points, with a pixel-size fallback.
-    try:
-        f = app.font()
-        ps = int(f.pointSize())
-        if ps > 0:
-            f.setPointSize(ps + 2)
-        else:
-            px = int(f.pixelSize())
-            if px > 0:
-                f.setPixelSize(px + 2)
-        app.setFont(f)
-    except Exception:
-        pass
 
     win = MainWindow()
     win.show()

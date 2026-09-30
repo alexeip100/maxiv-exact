@@ -41,3 +41,18 @@ def test_help_renderer_is_palette_aware_like_panda_baseline():
     assert "palette(alternate-base)" in mixin
     assert "palette(link)" in mixin
     assert "QBrush(QColor(" not in mixin
+
+
+def test_251_user_facing_help_covers_new_workflow_controls():
+    controls = (DOCS / "usage_controls.md").read_text(encoding="utf-8")
+    workflows = (DOCS / "usage_workflows.md").read_text(encoding="utf-8")
+    joined = controls + "\n" + workflows
+    for topic in [
+        "Settings (⚙)",
+        "System, Light, or Dark",
+        "Check all",
+        "Uncheck all",
+        "returns to the **Raw Data** tab",
+        "drag and drop",
+    ]:
+        assert topic in joined

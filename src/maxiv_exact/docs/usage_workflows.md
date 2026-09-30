@@ -33,7 +33,7 @@ Start simple:
 - **MCR-ALS**: Multivariate Curve Resolution – Alternating Least Squares
 
 ## Load an HDF5 file and orient yourself
-1. Click **Open HDF5** or drag an `.h5` / `.hdf5` file onto the **HDF5 Structure** tree.
+1. Click **Open HDF5** or drag an `.h5` / `.hdf5` file onto the **HDF5 Structure** tree or any main plotting area.
 2. Expand the file only as far as you need. The tree is lazy-loaded, so opening a large file does not require expanding every group.
 3. Start in **Raw Data**. For a standard measurement, try one detector-family selector (TEY/PEY/TFY/PFY) before manually checking individual datasets.
 4. If you want to inspect a scalar or text metadata item, click it in the HDF5 tree; its value is shown below the Raw plot when supported.
@@ -42,6 +42,13 @@ Start simple:
 You can open several files together and compare curves across them. Use the file-level right-click **Close** action when you want to remove only one file without clearing the whole session.
 
 **Controls used (What is what?):** *Open HDF5*, *HDF5 Structure*, *Raw Data*, *Setup channels*
+
+## Adjust the interface for your screen
+Use the **⚙ Settings** button when you want a different application theme or larger interface text. Theme and UI font size are remembered between sessions. Enlarging the UI font also enlarges the relevant control geometry; Matplotlib plot fonts are unchanged.
+
+If you want to restart the workflow, **Clear all** keeps the opened HDF5 files but resets the working state, while **Close all** also closes the files. Both return you to **Raw Data**.
+
+**Controls used (What is what?):** *Settings (⚙)*, *Clear all*, *Close all*
 
 ---
 
@@ -75,6 +82,8 @@ If you know you always want the same channel name:
 - Enable **All in channel**, then choose the channel in the dropdown.
 
 This is great for non-standard channels, monitor signals, or anything that isn’t reliably captured by the TEY/PEY/TFY/PFY grouping.
+
+For a quick global visibility change, use **Check all / Uncheck all** below the right-hand curve tree. The same pair is available in Processed Data and Plotted Data.
 
 **If nothing sensible shows up:** go back to **Setup channels** and fix the mapping first.
 

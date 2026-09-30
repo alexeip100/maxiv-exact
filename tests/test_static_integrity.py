@@ -1,11 +1,11 @@
 from pathlib import Path
 
 
-def test_version_metadata_is_250a7():
+def test_version_metadata_is_251():
     pyproject = Path("pyproject.toml").read_text(encoding="utf-8")
     init = Path("src/maxiv_exact/__init__.py").read_text(encoding="utf-8")
-    assert 'version = "2.5.0"' in pyproject
-    assert '__version__ = "2.5.0"' in init
+    assert 'version = "2.5.1"' in pyproject
+    assert '__version__ = "2.5.1"' in init
     assert '__date__ = "2026-09-29"' in init
 
 
@@ -53,8 +53,8 @@ def test_grid_handler_accepts_programmatic_default_call():
 def test_whats_new_subheadings_are_rendered_without_raw_hash_markers():
     from maxiv_exact.utils.help_text import get_whats_new_payload
 
-    html, latest = get_whats_new_payload(current_version="2.5.0", max_versions=1)
-    assert latest == "2.5.0"
+    html, latest = get_whats_new_payload(current_version="2.5.1", max_versions=1)
+    assert latest == "2.5.1"
     assert "####" not in html
     assert "changelog-subheading" in html
 
@@ -156,12 +156,17 @@ def test_no_legacy_qt5_dialog_or_enum_constants_remain():
     assert not offenders, "Legacy Qt5 constants remain: " + ", ".join(offenders)
 
 
-def test_whats_new_stable_release_hides_prerelease_builds():
+def test_whats_new_is_public_and_end_user_focused():
     from maxiv_exact.utils.help_text import build_whats_new_markdown
 
-    md, latest = build_whats_new_markdown(current_version="2.5.0", max_versions=5)
-    assert latest == "2.5.0"
-    assert "What changed since 2.4.4" in md
+    md, latest = build_whats_new_markdown(current_version="2.5.1", max_versions=5)
+    assert latest == "2.5.1"
+    for heading in ("#### Added", "#### Changed"):
+        assert heading in md
+    assert "drag-and-drop" in md
+    assert "Check all" in md
+    assert "System / Light / Dark" in md
     assert "2.5.0rc1" not in md
     assert "2.5.0a10" not in md
-
+    assert "Testing" not in md
+    assert "regression" not in md.lower()

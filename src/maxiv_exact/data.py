@@ -687,6 +687,11 @@ class DataMixin:
             QTimer.singleShot(0, getattr(self, '_refresh_all_in_channel_combo', lambda: None))
         except Exception:
             pass
+        # Closing all files returns the user to the start of the normal workflow.
+        try:
+            self.data_tabs.setCurrentIndex(0)
+        except Exception:
+            pass
 
     def close_single_hdf5_file(self, abs_path):
         """

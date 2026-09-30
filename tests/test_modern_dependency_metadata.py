@@ -22,6 +22,7 @@ def test_modern_dependency_floors_are_declared():
 
 def test_conda_environment_is_python314_qt6_only():
     env = (ROOT / "environment.yml").read_text(encoding="utf-8").lower()
+    assert env.startswith("name: exact\n")
     assert "python=3.14" in env
     assert "pyqt6>=6.11" in env
     assert "\n  - pyqt\n" not in env
@@ -45,7 +46,7 @@ def test_readme_documents_conda_qt6_install_without_pip_dependencies():
 
 def test_packaging_metadata_is_modernized_for_a7():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "2.5.0"' in pyproject
+    assert 'version = "2.5.1"' in pyproject
     assert 'license = "MIT"' in pyproject
     assert 'license = { text = "MIT" }' not in pyproject
     assert '"Programming Language :: Python :: 3.14"' in pyproject

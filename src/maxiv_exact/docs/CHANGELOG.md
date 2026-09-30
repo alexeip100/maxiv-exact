@@ -2,154 +2,37 @@
 
 # MAX IV EXACT changelog
 
-
 ---
+
+## [2.5.1] – 2026-09-30
+
+### Added
+- HDF5 files can now be loaded by drag-and-drop onto any of the three main plotting areas (**Raw Data**, **Processed Data**, or **Plotted Data**) as well as onto the **HDF5 Structure** tree.
+- Added a **Settings** cog with persistent **System / Light / Dark** themes and UI font-size choices (**Default / +1 pt / +2 pt**). Plot/figure font sizes remain independent.
+- Added **Check all** and **Uncheck all** buttons below the curve list/tree in all three data tabs.
+
+### Changed
+- **Clear all** and **Close all** now return the interface to **Raw Data**, matching the normal load → process → plot workflow.
+- Raw, Processed, and Plotted Data now use a consistent initial canvas/sidebar proportion. The divider remains adjustable, with a font-aware minimum width for the curve sidebar.
+- UI font-size changes now scale the relevant control geometry, spacing, tab margins, and key tree/list minimum widths together with the text.
+
+## [2.5.0.post1] – 2026-09-29
+
+### Fixed
+- Corrected the published source/tag content and release-facing documentation for 2.5.0. The intended application functionality is unchanged.
 
 ## [2.5.0] – 2026-09-29
 
-### What changed since 2.4.4
-- Rebranded the application as **EXACT** — *Exploration of X-ray Absorption: Characterization and Treatment* — with the Python distribution renamed to `maxiv-exact` and the primary launcher changed to `exact`.
-- Modernized the runtime from PyQt5 to **PyQt6** and moved the supported environment to **Python 3.14** with current NumPy, SciPy, Matplotlib, h5py, pandas, scikit-learn, and Markdown versions.
-- Reworked the user-facing Help for clearer first-time orientation, more balanced workflow guidance, improved light/dark-theme presentation, and clearer coverage of channel setup, processing order, I₀ selection, references, troubleshooting, and decomposition workflows.
-- Added a full user-facing README with installation, startup, quick-start, channel-profile, reference-library, and decomposition guidance.
-- Refreshed the application identity and presentation, including the EXACT icon and About dialog.
-- Added migration and regression fixes required by PyQt6 while preserving the established HDF5 loading, XAS/NEXAFS processing, plotting, reference-library, and PCA/NMF/MCR-ALS workflows.
-
-### Compatibility
-- Existing HDF5/reference workflows remain compatible; no intentional scientific-processing algorithm changes were introduced in the 2.5 modernization.
-- The legacy `flexpes-nexafs` launcher is retained temporarily, and existing legacy channel-mapping settings are migrated to the new EXACT configuration location when needed.
-
-
-## [2.5.0a10] – 2026-09-28
+### Added
+- Introduced the **EXACT** application identity — *Exploration of X-ray Absorption: Characterization and Treatment* — with the `exact` launcher and `maxiv-exact` Python distribution.
+- Added a fuller first-time-user Help/README covering loading, channel setup, processing order, I₀ selection, references, troubleshooting, and decomposition workflows.
 
 ### Changed
-- Integrated the finalized EXACT icon geometry selected during the icon-only design iteration.
-- Removed the white canvas outside the rounded icon frame by preserving alpha transparency outside the frame while keeping the white spectrum background inside the frame opaque.
-- Regenerated PNG, Windows ICO, and macOS ICNS application assets from the finalized transparent master.
-
-### Testing
-- Verified that the packaged PNG master has transparent corner pixels and an opaque white interior above the spectrum.
-
-## [2.5.0a9] – 2026-09-28
-
-### Changed
-- Integrated the finalized EXACT icon into the packaged application assets (`png`, `ico`, and `icns`) after the dedicated icon-design iteration.
-- Replaced the placeholder top-level README with a proper user-facing overview aligned in spirit with PANDA, covering capabilities, supported data, installation, launch commands, quick start, channel profiles, and advanced analysis tools.
-
-### Testing
-- Added regression coverage for the README structure and preserved the existing icon-asset checks.
-
-## [2.5.0a8] – 2026-09-28
-
-### Changed
-- Aligned the About EXACT dialog rubric order with PANDA so the dialog now presents the title/expansion first, followed by version, date, author, license, and then the descriptive paragraph.
-- Refined the About text wording to match the concise PANDA style more closely while remaining EXACT-specific.
-- Redesigned the EXACT application icon to use the same visual principle as PANDA: a black spectrum silhouette with a white area above it inside a rounded framed icon, while preserving the XAS curve character.
-
-### Testing
-- Added regression coverage for the About-dialog field order and kept manual inspection of the refreshed icon and About dialog as part of the pre-RC polish pass.
-
-## [2.5.0a7] – 2026-09-28
-
-### Changed
-- Aligned the user-facing Help presentation more closely with PANDA: theme-aware colors, clearer heading hierarchy, and palette-based navigation that works consistently in light and dark application themes.
-- Rebalanced **What is what?** and **How to?** for first-time users while preserving the established EXACT documentation and terminology. The Help now explains the normal three-stage workflow, distinguishes processing from display-only controls, and makes the processing order easier to follow.
-- Expanded practical guidance for loading/orienting in HDF5 files, choosing I₀, using the reference library, troubleshooting common processing problems, and following a safe complete first workflow.
-- Corrected remaining legacy documentation wording after the EXACT rebranding.
-
-### Testing
-- Added regression coverage for Help structure, first-time-user topics, theme-aware rendering, and removal of stale product branding from active Help.
-
-## [2.5.0a6] – 2026-09-28
-
-### Changed
-- Rebranded the application as **EXACT** — *Exploration of X-ray Absorption: Characterization and Treatment*.
-- Renamed the Python distribution to `maxiv-exact` and the import package to `maxiv_exact`.
-- Added `exact` as the primary launcher and `maxiv-exact` as an alternate launcher.
-- Retained `flexpes-nexafs` as a temporary compatibility launcher for the 2.5 transition.
-- Renamed application resources/build files to the EXACT identity and changed the Windows application ID to `MAXIV.EXACT`.
-- Updated application/About/help titles and package metadata to the EXACT identity while retaining FlexPES references where they describe the beamline or data format.
-
-### Compatibility
-- Existing legacy `~/.flexpes_nexafs/channel_mappings.json` settings are copied to the new EXACT user configuration location on first use when needed.
-- The project history and existing HDF5/reference data remain compatible; this is a rebrand of the existing software, not a new codebase.
-
-### Testing
-- Updated regression tests for the new distribution/import/launcher names and application resources.
-
-## [2.5.0a5] – 2026-09-28
-
-### Changed
-- Completed the modernization cleanup pass without changing application workflows or scientific algorithms.
-- Modernized project metadata for the Python 3.14/PyQt6 baseline, including SPDX-style MIT license metadata and Python 3.14 classifiers.
-- Removed obsolete NumPy 1.x integration fallback code now that NumPy 2.5.3 or newer is required.
-- Removed stale imports and Qt5-era comments left by earlier refactors while preserving runtime behavior.
-- Extended the development README with explicit clean-environment verification commands.
-
-### Testing
-- Added regression checks for the cleaned packaging metadata and removal of the obsolete NumPy 1.x fallback.
-- Full automated regression suite remains required before the release-candidate build.
-
-## [2.5.0a4] – 2026-09-28
-
-### Changed
-- Raised the supported Python runtime to Python 3.14 for the modernization baseline.
-- Updated the declared runtime dependency floors to the current stable scientific/GUI stack targeted for 2.5.0: PyQt6 6.11, NumPy 2.5.3, SciPy 1.18.1, Matplotlib 3.11.2, h5py 3.16.0, pandas 3.0.6, scikit-learn 1.9.1, and Markdown 3.10.3.
-- Added a conda-forge environment definition for a clean Python 3.14/PyQt6 development installation.
-- Documented that the editable package should be installed with `pip install -e . --no-deps` after conda creates the dependency stack, avoiding mixed pip/conda Qt runtimes.
-
-### Testing
-- Added metadata regression checks for the Python 3.14 floor, modern dependency floors, and the conda environment definition.
-- No intentional GUI, workflow, or scientific-processing algorithm changes are included in this build.
-
-## [2.5.0a3.post3] – 2026-09-28
+- Migrated the GUI from PyQt5 to **PyQt6** and moved the supported runtime to **Python 3.14** with a current scientific Python stack.
+- Refreshed the application icon, About dialog, and Help presentation while preserving the established HDF5/XAS workflow.
 
 ### Fixed
-- Audited all dialog result handling for PyQt6.
-- Replaced remaining Qt5-style `dlg.Accepted` result checks with `QDialog.DialogCode.Accepted` across library, processing, and main-window workflows.
-
-### Testing
-- Added regression coverage for legacy Qt5 dialog/enum constants so the same migration class is caught automatically.
-
-## [2.5.0a3.post2] – 2026-09-28
-
-### Fixed
-- Added missing PyQt6 widget imports for `QAbstractItemView` in the reference-library browser and `QApplication` in plotting core, fixing runtime `NameError` failures introduced during the Qt6 migration.
-
-### Testing
-- Added a static Qt-symbol import audit so referenced Qt classes beginning with `Q` must be imported or locally defined.
-
-## [2.5.0a3.post1] – 2026-09-28
-
-### Fixed
-- Fixed PyQt6 checkbox state handling for signals that emit integer check states, restoring group loading such as **All PEY data** and related checkbox-driven controls.
-
-## [2.5.0a3] – 2026-09-28
-
-### Fixed
-- Fixed a PyQt6 startup regression in `app.py`: the application event loop is now returned from `main()` and `sys.exit(main())` is only executed when the module is run as a script. This prevents the console entry point from hitting a module-level `sys.exit(app.exec())` call with no `sys` import.
-
-### Testing
-- Added a regression check that forbids a top-level `sys.exit(...)` call in `app.py` and verifies that `main()` owns the Qt event-loop return.
-
-## [2.5.0a2] – 2026-09-28
-
-### Changed
-- Migrated the application from PyQt5 to native PyQt6 while preserving the existing user workflow and processing behavior.
-- Updated Qt5-style enums, dialog execution calls, drag/drop flags, file-dialog options, and other Qt APIs to their PyQt6 equivalents.
-- Switched Matplotlib Qt canvas/toolbar imports from `backend_qt5agg` to the binding-neutral `backend_qtagg`.
-- Updated packaging/PyInstaller Qt collection from PyQt5 to PyQt6 and changed the runtime Qt dependency to `PyQt6>=6.8`.
-- Kept the Python version floor and all non-Qt scientific dependency requirements unchanged for this build.
-
-### Testing
-- Updated modernization regression checks so the source tree cannot silently reintroduce PyQt5 imports, the Qt5 Matplotlib backend, or `exec_()` calls.
-
-## [2.5.0a1] – 2026-09-28
-
-### Changed
-- Began the 2.5 modernization series with a deliberately behavior-preserving baseline build.
-- Strengthened automated baseline coverage for package metadata, entry-point wiring, bundled channel mappings, example HDF5 data, and the current Qt5/Matplotlib backend assumptions ahead of the PyQt6 migration.
-- No intentional application workflow, GUI, data-processing, or dependency changes are included in this build.
+- Fixed compatibility issues uncovered by the PyQt6 migration, including checkbox-state handling, dialog results, missing Qt imports, and application startup behavior.
 
 ## [2.4.4] – 2026-09-07
 

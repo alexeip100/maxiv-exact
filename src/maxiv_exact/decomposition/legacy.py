@@ -556,7 +556,7 @@ class BaseAnalysisTab(QWidget):
 
         # Short status line (shows what happened after "Run")
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #444;")
+        self.lbl_status.setStyleSheet("color: palette(mid);")
         self.lbl_status.setToolTip("Shows the latest analysis status and warnings.")
         root.addWidget(self.lbl_status)
 
@@ -1425,7 +1425,7 @@ class MCRTab(BaseAnalysisTab):
 
         self.lbl_bounds_note = QLabel("Default 0–100% leaves the fit unconstrained.")
         self.lbl_bounds_note.setWordWrap(True)
-        self.lbl_bounds_note.setStyleSheet("color: #555;")
+        self.lbl_bounds_note.setStyleSheet("color: palette(mid);")
         self.lbl_bounds_note.setToolTip("Bounds are used only when enabled.")
         bounds_layout.addWidget(self.lbl_bounds_note)
 
@@ -1517,7 +1517,7 @@ class MCRTab(BaseAnalysisTab):
         diag_layout = QVBoxLayout(diag_box)
         self.lbl_mcr_diagnostics = QLabel("Diagnostics will appear after running MCR-ALS.")
         self.lbl_mcr_diagnostics.setWordWrap(True)
-        self.lbl_mcr_diagnostics.setStyleSheet("color: #444;")
+        self.lbl_mcr_diagnostics.setStyleSheet("color: palette(mid);")
         self.lbl_mcr_diagnostics.setToolTip("Reports bounds and stability after the run.")
         diag_layout.addWidget(self.lbl_mcr_diagnostics)
         self.sidebar_layout.addWidget(diag_box)
@@ -2261,7 +2261,7 @@ class AnchorsCalibrateTab(QWidget):
         splitter.setStretchFactor(1, 1)
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #444;")
+        self.lbl_status.setStyleSheet("color: palette(mid);")
         right.addWidget(self.lbl_status)
 
         btn_row = QHBoxLayout()
@@ -3118,7 +3118,7 @@ class AnchorsApplyTab(QWidget):
         splitter.setStretchFactor(1, 1)
 
         self.lbl_status = QLabel("")
-        self.lbl_status.setStyleSheet("color: #444;")
+        self.lbl_status.setStyleSheet("color: palette(mid);")
         right.addWidget(self.lbl_status)
 
         self.chk_closure = QCheckBox("Closure: normalize concentrations to sum=1")
