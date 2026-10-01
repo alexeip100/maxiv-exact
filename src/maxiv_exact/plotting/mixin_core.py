@@ -460,7 +460,7 @@ class CorePlottingMixin:
 
         browser = HelpBrowser()
         browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        browser.setStyleSheet("font-size: 17px;")
+        browser.setStyleSheet("font-size: 17px; selection-background-color: #ffeb3b; selection-color: #111111;")
         browser.setMinimumWidth(380)
         browser.setHtml(usage_html)
 
@@ -701,7 +701,7 @@ class CorePlottingMixin:
 
         browser = HelpBrowser()
         browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        browser.setStyleSheet("font-size: 18px;")
+        browser.setStyleSheet("font-size: 18px; selection-background-color: #ffeb3b; selection-color: #111111;")
         browser.setHtml(usage_html)
 
         def _do_help_search(backward: bool = False):

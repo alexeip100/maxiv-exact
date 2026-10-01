@@ -44,9 +44,9 @@ def test_readme_documents_conda_qt6_install_without_pip_dependencies():
     assert "not `pyqt`" in readme
 
 
-def test_packaging_metadata_is_modernized_for_a7():
+def test_packaging_metadata_is_current():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "2.5.1"' in pyproject
+    assert 'version = "2.5.2"' in pyproject
     assert 'license = "MIT"' in pyproject
     assert 'license = { text = "MIT" }' not in pyproject
     assert '"Programming Language :: Python :: 3.14"' in pyproject

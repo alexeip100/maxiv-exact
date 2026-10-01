@@ -315,6 +315,15 @@ The annotation editor supports:
   - **Fine / Finest:** enable minor grid with successively denser spacing.
     Minor grid lines are drawn less prominently than major ones.
 
+## X-ray Reference tab
+
+The built-in **Reference** tab is documented in the current in-application Help:
+
+- **Help → What is what? → X-ray Reference** describes the controls, Henke/CXRO and Chantler/XrayDB quantities, attenuation decomposition, chemical formulas, compound mass attenuation, and source conventions.
+- **Help → How to? → Inspect built-in X-ray reference data** gives the practical plotting workflow, including multi-compound comparison.
+
+This legacy document is retained for older documentation references; the two Help pages above are the maintained source of truth for the current interface.
+
 ### Reference Spectra Library
 
 The app ships with a small reference library file `library.h5`. You can add your own reference spectra and load them

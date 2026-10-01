@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTreeWidget, QVBoxLayout, QWidget, QPushButton, QLabel, QHBoxLayout, QTabWidget,
     QCheckBox, QComboBox, QSpinBox, QMessageBox, QSizePolicy, QSplitter,
     QListWidget, QMenu, QSlider, QDoubleSpinBox, QDialog,
-    QAbstractItemView, QToolButton)
+    QAbstractItemView, QToolButton, QTabBar, QStyle, QStylePainter, QStyleOptionTab)
 
 # ---- Compatibility shims (Phase 2b) ---- / ----------------------------------------
 from PyQt6.QtGui import QFont
@@ -33,6 +33,58 @@ import re
 from .qt_helpers import is_checked_state
 from .appearance import current_appearance_config, apply_appearance_live, refresh_ui_metrics
 from .widgets.settings_dialog import SettingsDialog
+from .widgets.reference_panel import ReferencePanel
+
+
+class _SelectionAwareTabBar(QTabBar):
+    """QTabBar that can paint all tabs as inactive for separated tab groups."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._selection_active = True
+
+    def setSelectionActive(self, active: bool) -> None:  # noqa: N802
+        active = bool(active)
+        if self._selection_active != active:
+            self._selection_active = active
+            self.update()
+
+    def paintEvent(self, event):  # noqa: N802
+        if self._selection_active:
+            return super().paintEvent(event)
+        painter = QStylePainter(self)
+        option = QStyleOptionTab()
+        for index in range(self.count()):
+            if hasattr(self, "isTabVisible") and not self.isTabVisible(index):
+                continue
+            self.initStyleOption(option, index)
+            if not option.rect.isValid() or option.rect.isEmpty():
+                continue
+            option.state &= ~QStyle.StateFlag.State_Selected
+            painter.drawControl(QStyle.ControlElement.CE_TabBarTab, option)
+
+
+class _SeparatedReferenceTabBar(_SelectionAwareTabBar):
+    """Main tab bar showing only the three data-workflow tabs."""
+
+    FIRST_REFERENCE_INDEX = 3
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setUsesScrollButtons(False)
+
+    def tabSizeHint(self, index):  # noqa: N802
+        hint = super().tabSizeHint(index)
+        if index >= self.FIRST_REFERENCE_INDEX:
+            hint.setWidth(0)
+        return hint
+
+    def minimumTabSizeHint(self, index):  # noqa: N802
+        hint = super().minimumTabSizeHint(index)
+        if index >= self.FIRST_REFERENCE_INDEX:
+            hint.setWidth(0)
+        return hint
+
 
 class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, ExportMixin, LibraryMixin, QMainWindow):
 
@@ -587,6 +639,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.splitter.addWidget(self.right_panel_widget)
 
         self.data_tabs = QTabWidget()
+        self.data_tabs.setTabBar(_SeparatedReferenceTabBar(self.data_tabs))
         self.data_tabs.currentChanged.connect(self.on_tab_changed)
         self.right_panel.addWidget(self.data_tabs)
 
@@ -1015,6 +1068,44 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.plotted_splitter.setStretchFactor(0, 3)
         self.plotted_splitter.setStretchFactor(1, 1)
         self.data_tabs.addTab(self.plotted_splitter, "Plotted Data")
+
+# ---
+        # REFERENCE TAB
+        #######################################################################
+        self.reference_tab = ReferencePanel(self)
+        reference_index = self.data_tabs.addTab(self.reference_tab, "Reference")
+        self.reference_tab_index = reference_index
+        if hasattr(self.data_tabs, "setTabVisible"):
+            self.data_tabs.setTabVisible(reference_index, False)
+        else:
+            self.data_tabs.setTabEnabled(reference_index, False)
+
+        # Match PANDA: reference pages are selected from a visually separate
+        # tab handle at the far right of the tab row.
+        self.reference_tab_bar = _SelectionAwareTabBar(self.data_tabs)
+        self.reference_tab_bar.setObjectName("referenceTabBar")
+        self.reference_tab_bar.setShape(self.data_tabs.tabBar().shape())
+        self.reference_tab_bar.setDocumentMode(self.data_tabs.documentMode())
+        self.reference_tab_bar.setDrawBase(False)
+        self.reference_tab_bar.setExpanding(False)
+        self.reference_tab_bar.setUsesScrollButtons(False)
+        self.reference_tab_bar.addTab("Reference")
+        self.reference_tab_bar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.data_tabs.setCornerWidget(self.reference_tab_bar, Qt.Corner.TopRightCorner)
+
+        def _activate_reference_page(_reference_index: int = 0) -> None:
+            self.data_tabs.setCurrentIndex(reference_index)
+
+        self.reference_tab_bar.currentChanged.connect(_activate_reference_page)
+        self.reference_tab_bar.tabBarClicked.connect(_activate_reference_page)
+
+        def _sync_reference_selector(index: int) -> None:
+            reference_active = index == reference_index
+            self.reference_tab_bar.setSelectionActive(reference_active)
+            self.data_tabs.tabBar().setSelectionActive(not reference_active)
+
+        self.data_tabs.currentChanged.connect(_sync_reference_selector)
+        _sync_reference_selector(self.data_tabs.currentIndex())
 
 # ---
         # SIGNAL CONNECTIONS

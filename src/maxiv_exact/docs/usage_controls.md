@@ -398,3 +398,69 @@ The transfer is blocked unless:
 #### Clear Plotted
 Removes all curves from Plotted Data without changing Raw/Processed selections.
 
+
+
+# X-ray Reference
+
+The separate **Reference** tab at the far right provides built-in atomic X-ray reference data. It is independent of the user-maintained **Reference Spectra Library** used for measured spectra in Plotted Data.
+
+## Main controls
+
+- **Element:** choose an element from the periodic-table selector.
+- **Compound(s):** type one chemical formula, or several formulas separated by commas (for example `CoO, Co2O3, Co3O4`), and press **Enter**. Valid formulas switch the Reference tab to compound mode and are plotted together. Up to eight compounds can be compared at once.
+- **Source:** choose **Henke / CXRO**, **Chantler / XrayDB**, or **Henke + Chantler** when both sources contain the selected quantity.
+- **Quantity:** choose `f₁`, `f₂`, one of the Chantler mass-attenuation coefficients, or **μ compare**. **μ compare** overlays `μ photo`, `μ incoh` and `μ total` for one Chantler element or one compound. Hover over the current Source or Quantity entry for a short definition.
+- **Photon energy:** sets the dashed vertical cursor. The cursor can also be dragged directly on the plot. Circular markers show the intersections with the visible reference curves, and the value table below the plot updates continuously.
+- **Full source range:** normally the plot opens in the soft-X-ray region up to 2500 eV. Enable this to expose the full tabulated source range.
+- **Legend:** show or hide the legend. In comparison mode the legend is draggable.
+
+## Reference quantities
+
+- **Photon energy, E (eV):** X-ray photon energy on the horizontal axis. The frozen database preserves the full original source ranges; 2500 eV is only the default soft-X-ray display limit.
+- **f₁ (electrons):** full real atomic scattering factor. **Henke/CXRO** tabulates full `f₁` directly. **Chantler/XrayDB** stores the anomalous real correction `f′`, so EXACT displays `f₁ = Z + f′` for direct comparison with Henke. The original Chantler `f′` remains unchanged in the frozen database.
+- **f₂ (electrons):** imaginary, absorptive part of the complex atomic scattering factor. It is closely related to X-ray absorption and changes strongly at absorption edges. Available from both **Henke/CXRO** and **Chantler/XrayDB**.
+- **μ photo (cm²/g):** photoelectric mass attenuation coefficient: attenuation caused by photoabsorption per unit mass density. Available from **Chantler/XrayDB**.
+- **μ incoh (cm²/g):** incoherent-scattering contribution to the mass attenuation coefficient. Available from **Chantler/XrayDB**.
+- **μ total (cm²/g):** total mass attenuation coefficient tabulated in the Chantler/XrayDB dataset. Available from **Chantler/XrayDB**.
+- **μ compare:** overlays `μ photo`, `μ incoh` and `μ total` for the same element or a single compound, using one log-scale axis and one photon-energy cursor. It is intentionally disabled when several compounds are active, to avoid an ambiguous 3 × N curve plot.
+
+## How total attenuation is composed
+
+For the Chantler attenuation data used by EXACT, the total attenuation coefficient is the sum of photoelectric absorption, coherent (Rayleigh) scattering and incoherent (Compton) scattering:
+
+$$\mu_{\mathrm{total}} = \mu_{\mathrm{photo}} + \mu_{\mathrm{coh}} + \mu_{\mathrm{incoh}}$$
+
+The same decomposition applies to the **mass attenuation coefficients** shown in EXACT after division by density:
+
+$$\left(\frac{\mu}{\rho}\right)_{\mathrm{total}} = \left(\frac{\mu}{\rho}\right)_{\mathrm{photo}} + \left(\frac{\mu}{\rho}\right)_{\mathrm{coh}} + \left(\frac{\mu}{\rho}\right)_{\mathrm{incoh}}$$
+
+Here `μ coh` denotes coherent (**Rayleigh**) scattering and `μ incoh` denotes incoherent (**Compton**) scattering. This equation describes the **physical decomposition** of the total attenuation coefficient. The frozen XrayDB/Chantler tables bundled with EXACT, however, provide only three attenuation channels as independent arrays: `μ photo`, `μ incoh` and `μ total`. A separate `μ coh` channel is **not present in the downloaded Chantler table used by EXACT**, so it cannot be selected or plotted directly in the Reference tab. Its contribution is contained implicitly in `μ total` and can only be inferred as `μ total − μ photo − μ incoh`.
+
+In the soft-X-ray range for which EXACT is primarily intended, coherent (Rayleigh) scattering is generally a very small contribution compared with photoelectric absorption, and is often also small compared with the incoherent (Compton) contribution. This is why the available `μ total` curve can lie almost exactly on top of `μ photo + μ incoh`. The **μ compare** mode therefore shows the three quantities that are actually tabulated in the bundled database; it should not be read as a plot of every physical attenuation channel separately.
+
+
+## Chemical composition and compound mass attenuation
+
+Compound mode currently calculates **only Chantler/XrayDB mass attenuation coefficients**. Henke/CXRO and compound `f₁`/`f₂` are intentionally not used for this calculation.
+
+The formula parser accepts element symbols, positive stoichiometric numbers and nested parentheses. Examples include `Co2O3`, `LiFePO4`, `Al2(SO4)3` and fractional stoichiometry such as `La0.7Sr0.3MnO3`. To compare several materials, enter comma-separated formulas, for example `CoO, Co2O3, Co3O4`; EXACT plots one Chantler mass-attenuation curve for each formula, using the same selected quantity and photon-energy cursor. Up to eight compounds can be shown together. Duplicate formula entries are removed. Weight-percent mixtures, unknown `x` concentrations, ionic charges and hydrate-dot notation are not yet supported. The parsing scope follows the chemical-formula approach used in **XAFSmass / ParSeq-XAS**, but EXACT implements only this narrower stoichiometric subset locally.
+
+From the formula, EXACT calculates each element's **mass fraction** `wᵢ` using the elemental molar masses in the bundled reference database. The compound mass attenuation coefficient is then constructed with the standard mixture rule:
+
+$$\left(\frac{\mu}{\rho}\right)_{\mathrm{compound}} = \sum_i w_i \left(\frac{\mu}{\rho}\right)_i$$
+
+This calculation is available for:
+
+- **μ photo / ρ:** photoelectric mass attenuation coefficient.
+- **μ incoh / ρ:** incoherent (**Compton**) scattering contribution to the mass attenuation coefficient.
+- **μ total / ρ:** total Chantler/XrayDB mass attenuation coefficient.
+
+All are displayed in **cm²/g**. **Density is not required** for the displayed mass attenuation coefficient. Density would only be needed later to convert mass attenuation to the linear attenuation coefficient or to an attenuation length:
+
+$$\mu = \rho\left(\frac{\mu}{\rho}\right), \qquad \lambda = \frac{1}{\mu}$$
+
+Each compound curve is built from the elemental Chantler tabulations over their common energy range. The existing Photon energy cursor works for all compound curves together, and the live-value table reports one value per compound. For a single compound, the parsed molar mass and elemental mass fractions are shown below the formula field; for several compounds, the active formulas are summarized there and the detailed composition information is available in the tooltip.
+
+## Source conventions
+
+**Henke / CXRO** and **Chantler / XrayDB** remain separate source datasets. **Henke + Chantler** overlays the two independent curves; EXACT does not average or merge them. For `f₁`, the overlay compares Henke's tabulated full `f₁` with `Z + f′` derived from Chantler/XrayDB. The bundled database is local and frozen, so normal use of the Reference tab does not require internet access.

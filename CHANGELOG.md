@@ -4,6 +4,18 @@
 
 ---
 
+## [2.5.2] – 2026-10-01
+
+### Added
+- Added a separate **Reference** tab with bundled offline **Henke/CXRO** and **Chantler/XrayDB** X-ray reference data, including atomic scattering factors, Chantler mass attenuation coefficients, source comparison, full-range viewing, and a draggable photon-energy cursor with live values.
+- Added chemical-composition handling in the Reference tab: one or several formulas can be entered to calculate and compare **Chantler-based compound mass attenuation coefficients**, and **μ compare** overlays `μ photo`, `μ incoh`, and `μ total` for one element or compound.
+
+### Fixed
+- Help search matches are now highlighted clearly so they remain easy to locate across application themes.
+
+### Changed
+- Expanded the built-in Help and README for the new reference-data workflow, including source conventions, compound attenuation, rendered scientific equations, and clearer installation instructions.
+
 ## [2.5.1] – 2026-09-30
 
 ### Added

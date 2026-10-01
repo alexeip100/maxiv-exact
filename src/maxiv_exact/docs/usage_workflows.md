@@ -260,6 +260,31 @@ A reference overlay is an aid to comparison, not an automatic chemical-state ass
 
 ---
 
+
+# Inspect built-in X-ray reference data
+
+Use the separate **Reference** tab when you want atomic scattering-factor or attenuation data without loading an experimental spectrum.
+
+1. Select an **element** from the periodic table.
+2. Choose **Henke / CXRO**, **Chantler / XrayDB**, or **Henke + Chantler**.
+3. Choose the desired quantity. Comparison mode is available for `f₁` and `f₂`, which are present in both source families.
+4. Set **Photon energy** numerically or drag the dashed vertical cursor. The circle markers and value table show the interpolated values of the visible curves at that energy.
+5. Enable **Full source range** only when you need to inspect energies outside the default soft-X-ray display range.
+
+For `f₁`, remember that Chantler/XrayDB stores the anomalous correction `f′`; EXACT displays the directly comparable full value `Z + f′`. The frozen source table itself is not modified. For a single Chantler element, choose **μ compare** to overlay `μ photo`, `μ incoh` and `μ total` on one logarithmic plot.
+
+### Plot one or several compound mass attenuation coefficients
+
+1. In the **Compound(s)** field, type one formula such as `Co2O3`, or several formulas separated by commas such as `CoO, Co2O3, Co3O4`, and press **Enter**.
+2. For a single compound, check the parsed molar mass and mass fractions shown below the field. For several compounds, hover over the summary to inspect the detailed parsed compositions.
+3. EXACT switches to **Chantler / XrayDB** and offers only the three compound mass attenuation quantities.
+4. Choose **μ photo**, **μ incoh (Compton)** or **μ total**. One curve is plotted for each active compound. With exactly one compound, **μ compare** is also available and overlays all three attenuation quantities for that material.
+5. Use the Photon energy control or drag the dashed line; the live-value table reports the corresponding mass-attenuation value for every visible curve at the same energy.
+
+The calculation uses elemental **mass fractions** and the mixture rule `Σ wᵢ(μ/ρ)ᵢ`. No material density is needed for the displayed mass attenuation coefficient in cm²/g. Up to eight compounds can be compared at once. Duplicate formula entries are removed. Click any periodic-table element to return to elemental mode.
+
+**Controls used (What is what?):** *X-ray Reference*
+
 # Multivariate analysis
 
 ## Send curves to PCA / decomposition window

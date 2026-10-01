@@ -33,9 +33,8 @@ def test_exact_icon_resources_and_build_entry_are_rebranded():
         "exact_icon_256.png", "exact_icon_512.png",
     ]:
         assert (assets / name).is_file(), name
-    spec = (ROOT / "MAXIV-EXACT.spec").read_text(encoding="utf-8")
-    assert "run_exact.py" in spec
-    assert "run_flexpes.py" not in spec
+    assert (ROOT / "run_exact.py").is_file()
+    assert not (ROOT / "run_flexpes.py").exists()
 
 
 def test_legacy_namespace_only_remains_for_settings_migration():

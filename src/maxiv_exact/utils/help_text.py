@@ -292,11 +292,82 @@ th, td {{ border: 1px solid {c['mid']}; padding: 0.30em 0.48em; vertical-align: 
     return css
 
 
+
+
+def _prepare_math_markdown(md: str, base_px: int = 17) -> tuple[str, dict[str, str]]:
+    """Replace Help math with stable tokens and return rendered equation HTML.
+
+    QTextBrowser does not execute MathJax. We therefore render Markdown
+    ``$...$`` and ``$$...$$`` expressions with Matplotlib mathtext, then
+    substitute the resulting SVGs *after* Markdown conversion. The token step
+    is important because EXACT also has a small HTML-escaping Markdown fallback.
+    """
+    import base64
+    from io import BytesIO
+
+    replacements: dict[str, str] = {}
+
+    def image_tag(expr: str, *, block: bool, index: int) -> str:
+        try:
+            from matplotlib.font_manager import FontProperties
+            from matplotlib.mathtext import math_to_image
+
+            buffer = BytesIO()
+            prop = FontProperties(size=max(10, min(30, int(base_px) + (2 if block else 0))))
+            math_to_image(
+                f"${expr.strip()}$", buffer, prop=prop, format="svg", dpi=160,
+                color=_help_palette_colors()["text"],
+            )
+            svg = buffer.getvalue().decode("utf-8")
+            svg = svg.replace('style="fill: #ffffff"', 'style="fill: none"', 1)
+            encoded = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+            img = (
+                f'<img src="data:image/svg+xml;base64,{encoded}" '
+                f'alt="{expr.strip()}" style="vertical-align:middle;" />'
+            )
+            if block:
+                return f'<div style="text-align:center; margin:0.55em 0 0.75em 0;">{img}</div>'
+            return img
+        except Exception:
+            import html
+            safe = html.escape(expr.strip())
+            return f'<span style="font-family:serif; font-style:italic;">{safe}</span>'
+
+    counter = 0
+
+    def block_repl(match):
+        nonlocal counter
+        token = f"EXACTMATHBLOCK{counter}TOKEN"
+        replacements[token] = image_tag(match.group(1), block=True, index=counter)
+        counter += 1
+        return token
+
+    def inline_repl(match):
+        nonlocal counter
+        token = f"EXACTMATHINLINE{counter}TOKEN"
+        replacements[token] = image_tag(match.group(1), block=False, index=counter)
+        counter += 1
+        return token
+
+    md = re.sub(r"\$\$(.+?)\$\$", block_repl, md, flags=re.S)
+    md = re.sub(r"(?<!\$)\$([^\n$]+?)\$(?!\$)", inline_repl, md)
+    return md, replacements
+
+
+def _restore_math_html(content: str, replacements: dict[str, str]) -> str:
+    for token, html_equation in replacements.items():
+        # Block tokens are normally wrapped in <p>...</p> by Markdown/fallback.
+        content = content.replace(f"<p>{token}</p>", html_equation)
+        content = content.replace(token, html_equation)
+    return content
+
+
 def get_usage_html(md_filename: str = "usage_controls.md", base_px: int = 17) -> str:
     """Return styled help content as HTML from a Markdown file under docs/."""
     md = _read_help_markdown(md_filename)
     if not md:
         return "<p><b>Help file not found.</b></p>"
+    md, math_replacements = _prepare_math_markdown(md, base_px)
     try:
         import markdown  # type: ignore
         content = markdown.markdown(
@@ -304,6 +375,7 @@ def get_usage_html(md_filename: str = "usage_controls.md", base_px: int = 17) ->
         )
     except Exception:
         content = _basic_md_to_html(md)
+    content = _restore_math_html(content, math_replacements)
     # Qt's rich-text parser does not consistently honour font sizes from a
     # document-level <style> block for h1-h4. Add the essential typography
     # inline so the displayed hierarchy matches the selected base font.
