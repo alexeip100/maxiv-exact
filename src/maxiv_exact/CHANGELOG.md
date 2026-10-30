@@ -1,3 +1,13 @@
+## [2.6.1] – 2026-10-30
+
+### Changed
+- FL Map Analysis now uses the **terrain** colormap by default when opening or resetting maps.
+- Clarified the recommended Conda installation of PyQt6 WebEngine and the wheel installation procedure to avoid mixed Qt dependencies.
+
+### Fixed
+- Restored the transfer of measured fluorescence ROI and fitted peak-area spectra to Processed Data; these curves are no longer mistaken for generic HDF5 metadata.
+- Restored **Pass** for transferred fluorescence spectra, allowing them to be sent from Processed Data to Plotted Data without a misleading Raw Data-only warning.
+
 ## [2.6.0] – 2026-10-30
 
 ### Added

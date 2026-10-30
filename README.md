@@ -34,13 +34,15 @@ EXACT currently focuses on **HDF5** files used for X-ray absorption spectroscopy
 
 ## Installation
 
-A dedicated **conda environment** is recommended. EXACT 2.6 targets **Python 3.14** and **PyQt6**.
+A dedicated **conda environment** is recommended. EXACT 2.6.1 targets **Python 3.14** and **PyQt6**.
 
 Create the environment once. The command below installs the important Qt/scientific dependencies explicitly, including **h5py** (required for HDF5 files):
 
 ```bash
-conda create -n exact -c conda-forge --strict-channel-priority python=3.14 pyqt6 numpy scipy matplotlib h5py pandas scikit-learn markdown pip
+conda create -n exact --override-channels -c https://conda.anaconda.org/conda-forge python=3.14 pyqt6 pyqt6-webengine numpy scipy matplotlib h5py pandas scikit-learn markdown pip
 ```
+
+**Important:** Install `pyqt6-webengine` with Conda as shown above, not through pip. Installing the wheel without `--no-deps` may pull in pip-managed Qt libraries and leave Qt unable to find its Windows platform plugin. The explicit conda-forge URL and `--override-channels` prevent a misconfigured `defaults` channel from taking priority.
 
 Activate the environment:
 
@@ -55,11 +57,11 @@ Then choose **one** installation method.
 1. Open the EXACT repository on GitHub.
 2. Open **Releases** and choose the **Latest** release.
 3. Scroll to the **bottom of the release page** and expand **Assets** if necessary.
-4. Download the file ending in **`.whl`** (for example `maxiv_exact-2.6.0-py3-none-any.whl`).
+4. Download the file ending in **`.whl`** (for example `maxiv_exact-2.6.1-py3-none-any.whl`).
 5. Open a terminal in the folder containing the downloaded wheel and install it:
 
 ```bash
-pip install --no-deps maxiv_exact-2.6.0-py3-none-any.whl
+pip install --no-deps maxiv_exact-2.6.1-py3-none-any.whl
 ```
 
 ### From the source folder
@@ -78,7 +80,7 @@ If you are modifying the source code, install it in editable mode instead:
 pip install -e . --no-deps
 ```
 
-> Use the conda-forge package **`pyqt6`**, not `pyqt` (which installs PyQt5). Keeping Qt and the scientific dependencies under conda and using `--no-deps` for EXACT avoids mixed pip/conda Qt installations.
+> Use the conda-forge packages **`pyqt6`** and **`pyqt6-webengine`**, not `pyqt` (PyQt5). **Always use `--no-deps`** when installing EXACT into this Conda environment, including from a wheel or local source. If Qt fails to find its Windows platform plugin, check package sources with `conda list | findstr /i "pyqt qt6 webengine"`; do not modify your launcher or plugin paths before checking for mixed pip/Conda Qt files.
 
 ## Starting EXACT
 

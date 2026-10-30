@@ -15,9 +15,9 @@ def test_processed_help_names_fy_analysis_and_points_to_workflow():
 
 
 def test_260_whats_new_is_release_focused():
-    text, latest = build_whats_new_markdown(current_version='2.6.0', max_versions=5)
+    text, latest = build_whats_new_markdown(current_version='2.6.1', max_versions=5)
     latest_section = text.split('### 2.6.0 — 2026-10-30', 1)[1].split('---', 1)[0]
-    assert latest == '2.6.0'
+    assert latest == '2.6.1'
     assert '#### Added' in latest_section
     assert 'FL Map Analysis' in latest_section
     assert 'ROI' in latest_section

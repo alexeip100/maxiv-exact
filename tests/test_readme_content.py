@@ -39,7 +39,10 @@ def test_readme_release_installation_is_complete_and_copy_friendly():
     assert "pip install" in text
     # Commands intended as separate shell inputs must not share one fenced block.
     assert "conda create -n exact" in text
-    assert "```\n\nActivate the environment" in text
+    assert "```\n\n**Important:**" in text
+    assert "```bash\nconda activate exact" in text
+    assert "pyqt6-webengine" in text
+    assert "--override-channels" in text
     assert "conda activate exact" in text
 
 

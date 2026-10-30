@@ -19,6 +19,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from .fluorescence_toolbar import FluorescenceToolbar
+from .. import __version__
 from ..fluorescence_energy import match_master, read_energy, available_entries, detector_entry_id
 from ..hdf5_loading import split_tree_payload
 from ..fluorescence_map import (load_fluorescence_map,fit_detector_spectrum,evaluate_model,
@@ -219,7 +220,7 @@ class FLMapDialog(QDialog):
         # Keep an explicit reference for transferring spectra to the main app.
         super().__init__(None)
         self._main_window=parent
-        self.setWindowTitle('FL Map Analysis — EXACT 2.6.0')
+        self.setWindowTitle(f'FL Map Analysis — EXACT {__version__}')
         self.resize(1510,850)
         self.setModal(False)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.Window | Qt.WindowType.WindowMinimizeButtonHint | Qt.WindowType.WindowMaximizeButtonHint)
@@ -278,7 +279,7 @@ class FLMapDialog(QDialog):
         self.roi.setToolTip('Half-width in detector channels of the FY extraction region around FY center.')
         self._map_mode='Original'
         self._reconstruction_cache={}
-        self._colormap='viridis' 
+        self._colormap='terrain' 
         self._colormaps=available_colormaps()
         self._legend_anchor=None
         from .fluorescence_axes_dialog import build_axes_dialog
@@ -657,7 +658,7 @@ class FLMapDialog(QDialog):
         for widget,value in ((self.avg,5),(self.roi,80),(self.e_start,0.),(self.e_end,0.),
                              (self.det_slope,.9235),(self.det_offset,11.81)):
             widget.blockSignals(True);widget.setValue(value);widget.blockSignals(False)
-        self._colormap='viridis'
+        self._colormap='terrain'
         self.use_incident_ev.blockSignals(True);self.use_incident_ev.setChecked(False);self.use_incident_ev.blockSignals(False)
         self.use_detector_ev.blockSignals(True);self.use_detector_ev.setChecked(True);self.use_detector_ev.blockSignals(False)
         self.mapcanvas.draw_idle();self.speccanvas.draw_idle()

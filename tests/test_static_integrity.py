@@ -45,8 +45,8 @@ def test_grid_handler_accepts_programmatic_default_call():
 def test_whats_new_subheadings_are_rendered_without_raw_hash_markers():
     from maxiv_exact.utils.help_text import get_whats_new_payload
 
-    html, latest = get_whats_new_payload(current_version="2.6.0", max_versions=1)
-    assert latest == "2.6.0"
+    html, latest = get_whats_new_payload(current_version="2.6.1", max_versions=1)
+    assert latest == "2.6.1"
     assert "####" not in html
     assert "changelog-subheading" in html
 
@@ -151,8 +151,8 @@ def test_no_legacy_qt5_dialog_or_enum_constants_remain():
 def test_whats_new_is_public_and_end_user_focused():
     from maxiv_exact.utils.help_text import build_whats_new_markdown
 
-    md, latest = build_whats_new_markdown(current_version="2.6.0", max_versions=5)
-    assert latest == "2.6.0"
+    md, latest = build_whats_new_markdown(current_version="2.6.1", max_versions=5)
+    assert latest == "2.6.1"
     for heading in ("#### Added", "#### Changed"):
         assert heading in md
     assert "drag-and-drop" in md

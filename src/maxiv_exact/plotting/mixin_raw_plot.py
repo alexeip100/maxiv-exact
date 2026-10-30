@@ -20,7 +20,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QListWidgetItem, QMessageBox
 
 from ..data import lookup_energy
-from ..hdf5_curve_type import is_measurement_path, is_plottable_dtype, raw_curve_axis
+from ..hdf5_curve_type import is_measurement_path, is_processed_xas_path, is_plottable_dtype, raw_curve_axis
 from .. import processing
 
 try:
@@ -38,7 +38,7 @@ class RawPlotMixin:
             return
 
         visible_keys = [key for key in self.plot_data if self.raw_visibility.get(key, False)]
-        if any("##" in str(k) and not is_measurement_path(str(k).split("##", 1)[1])
+        if any("##" in str(k) and not is_processed_xas_path(str(k).split("##", 1)[1])
                for k in visible_keys):
             QMessageBox.information(self, "Raw viewer only",
                 "Generic HDF5 datasets can be viewed in Raw Data, but cannot be sent "
