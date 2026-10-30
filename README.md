@@ -9,6 +9,9 @@ Starting with the **2.5 series**, the same software continues under the **EXACT*
 ## Main capabilities
 
 - Load and inspect X-ray absorption data stored in HDF5 files.
+- Explore fluorescence detector maps, inspect emission spectra, compare fluorescence-energy ROIs and extract excitation spectra.
+- Fit fluorescence emission peaks across a scan; view fitted, residual and component maps, and send measured ROI or fitted-component spectra to Processed Data.
+- Plot individual numerical 1D datasets outside measurement groups in Raw Data, using a data-index axis.
 - Drag-and-drop HDF5 loading from the file tree or any main plotting area.
 - Work with the common detector channels used in FlexPES XAS/NEXAFS measurements, including **TEY**, **PEY**, **TFY**, **PFY**, and the corresponding **I₀** signal.
 - Use built-in or user-edited **channel profiles** to map HDF5 dataset names to the physical detector roles.
@@ -23,13 +26,15 @@ Starting with the **2.5 series**, the same software continues under the **EXACT*
 - Persistent **System / Light / Dark** application themes and adjustable UI font size, with font-aware interface sizing.
 - Fast **Check all / Uncheck all** controls for the curve lists in Raw, Processed, and Plotted Data.
 
+Self-absorption correction is included only as an **experimental work-in-progress tool** and is not yet validated for routine quantitative use.
+
 ## Supported data format
 
 EXACT currently focuses on **HDF5** files used for X-ray absorption spectroscopy workflows. The package includes an example HDF5 file structure and is designed around the FlexPES data organization, while the **channel profile** system makes it adaptable to related HDF5 layouts.
 
 ## Installation
 
-A dedicated **conda environment** is recommended. EXACT 2.5 targets **Python 3.14** and **PyQt6**.
+A dedicated **conda environment** is recommended. EXACT 2.6 targets **Python 3.14** and **PyQt6**.
 
 Create the environment once. The command below installs the important Qt/scientific dependencies explicitly, including **h5py** (required for HDF5 files):
 
@@ -50,11 +55,11 @@ Then choose **one** installation method.
 1. Open the EXACT repository on GitHub.
 2. Open **Releases** and choose the **Latest** release.
 3. Scroll to the **bottom of the release page** and expand **Assets** if necessary.
-4. Download the file ending in **`.whl`** (for example `maxiv_exact-2.5.2-py3-none-any.whl`).
+4. Download the file ending in **`.whl`** (for example `maxiv_exact-2.6.0-py3-none-any.whl`).
 5. Open a terminal in the folder containing the downloaded wheel and install it:
 
 ```bash
-pip install --no-deps maxiv_exact-2.5.2-py3-none-any.whl
+pip install --no-deps maxiv_exact-2.6.0-py3-none-any.whl
 ```
 
 ### From the source folder
@@ -89,7 +94,7 @@ The following compatibility/alternative launcher is also available:
 maxiv-exact
 ```
 
-The older launcher is retained temporarily during the 2.5 transition:
+The older launcher is retained for compatibility with earlier installations:
 
 ```bash
 flexpes-nexafs
@@ -107,9 +112,10 @@ python -m maxiv_exact
 2. Use **Open HDF5 files** to load one or more HDF5 data files.
 3. In the left file tree, explore the available scans and detector channels.
 4. Load a detector group such as **TEY**, **PEY**, **TFY**, or **PFY**, or use the group-loading controls to load all curves in a selected channel.
-5. Use the right-hand curve trees/lists (or **Check all / Uncheck all**) to control visibility, then move selected spectra to the processing workflow and inspect how raw and processed representations differ.
-6. Choose an appropriate **I₀** signal and apply normalization/background options as needed.
-7. Compare the results in the plotting area, optionally using grouping, summation, references, or decomposition tools.
+5. For fluorescence detector maps, use **Processed Data → FY Analysis → FL Map Analysis** and consult **Help → How to? → FL Map Analysis**.
+6. Use the right-hand curve trees/lists (or **Check all / Uncheck all**) to control visibility, then move selected spectra to the processing workflow and inspect how raw and processed representations differ.
+7. Choose an appropriate **I₀** signal and apply normalization/background options as needed.
+8. Compare the results in the plotting area, optionally using grouping, summation, references, or decomposition tools.
 
 Use the **⚙ Settings** button next to the main file controls to choose **System**, **Light**, or **Dark** theme and to enlarge the Qt interface font by +1 or +2 pt. These appearance settings are remembered between sessions; Matplotlib plot font sizes remain independent. Common control geometry and key tree/list minimum widths scale with the selected UI font size to avoid clipped labels.
 

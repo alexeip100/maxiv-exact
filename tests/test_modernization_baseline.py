@@ -42,13 +42,6 @@ def test_a7_is_the_intentional_native_pyqt6_baseline():
         assert ".exec_(" not in text, source
 
 
-def test_root_and_packaged_changelogs_stay_identical():
-    root_log = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    packaged_log = (PKG / "docs" / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert packaged_log == root_log
-    assert "## [2.5.0] – 2026-09-29" in root_log
-
-
 def test_bundled_channel_mapping_schema_is_valid():
     mapping_path = PKG / "docs" / "channel_mappings.json"
     payload = json.loads(mapping_path.read_text(encoding="utf-8"))

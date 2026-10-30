@@ -39,6 +39,14 @@ def main():
     # creation; otherwise the taskbar can inherit python.exe's generic icon.
     _set_windows_app_user_model_id()
 
+    # Qt WebEngine must be imported before constructing QApplication. Importing
+    # it lazily from the SA Help window triggers an ImportError on Windows.
+    # Keep WebEngine optional, so normal EXACT startup works without the add-on.
+    try:
+        from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+    except ImportError:
+        pass  # Help will report the actual error if the user opens it.
+
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
     app.setOrganizationName("MAX IV")
     app.setApplicationName("EXACT")

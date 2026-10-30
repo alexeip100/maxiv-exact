@@ -20,6 +20,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QListWidgetItem, QMessageBox
 
 from ..data import lookup_energy
+from ..hdf5_curve_type import is_measurement_path, is_plottable_dtype, raw_curve_axis
 from .. import processing
 
 try:
@@ -37,6 +38,12 @@ class RawPlotMixin:
             return
 
         visible_keys = [key for key in self.plot_data if self.raw_visibility.get(key, False)]
+        if any("##" in str(k) and not is_measurement_path(str(k).split("##", 1)[1])
+               for k in visible_keys):
+            QMessageBox.information(self, "Raw viewer only",
+                "Generic HDF5 datasets can be viewed in Raw Data, but cannot be sent "
+                "to XAS processing. Uncheck them before using Processed Data.")
+            return
         if self.chk_sum.isChecked():
             if not visible_keys:
                 return
@@ -693,24 +700,6 @@ class RawPlotMixin:
             return
         abs_path, hdf5_path = data
         hdf5_path = self._normalize_hdf5_key(hdf5_path)
-        # Prefer datasets from the "measurement" group only; ignore "plot_1" and other derived groups.
-        norm = "/" + str(hdf5_path).strip("/") + "/"
-        if "/measurement/" not in norm:
-            try:
-                from PyQt6.QtWidgets import QMessageBox as _QMessageBox
-
-                _QMessageBox.information(
-                    self,
-                    "Ignoring non-measurement data",
-                    f'The dataset “{hdf5_path}” is not under a "/measurement/" group and will be ignored.',
-                )
-            except Exception:
-                pass
-            try:
-                item.setCheckState(0, Qt.CheckState.Unchecked)
-            except Exception:
-                pass
-            return
         if abs_path not in self.hdf5_files:
             return
 
@@ -719,6 +708,11 @@ class RawPlotMixin:
                 if hdf5_path and hdf5_path in f:
                     ds_obj = f[hdf5_path]
                     if isinstance(ds_obj, h5py.Dataset) and ds_obj.ndim == 1:
+                        if not is_plottable_dtype(ds_obj.dtype):
+                            QMessageBox.information(self, "Unsupported data",
+                                "Only real numeric or Boolean 1D datasets can be plotted.")
+                            item.setCheckState(0, Qt.CheckState.Unchecked)
+                            return
                         if getattr(ds_obj, "size", 0) == 0:
                             QMessageBox.warning(
                                 self,
@@ -873,7 +867,10 @@ class RawPlotMixin:
                     continue
 
                 # Lookup energy axis; pass point count without calling len() on scalars
-                x_data = lookup_energy(self, abs_path, parent, int(y_arr.size))
+                x_data = raw_curve_axis(
+                    hdf5_path, int(y_arr.size),
+                    lambda: lookup_energy(self, abs_path, parent, int(y_arr.size)),
+                )
                 x_arr = np.asarray(x_data)
                 if x_arr.ndim != 1 or x_arr.size == 0:
                     continue
@@ -897,7 +894,11 @@ class RawPlotMixin:
             except Exception:
                 # Skip problematic datasets but continue plotting the rest
                 continue
-        ax.set_xlabel("Photon energy (eV)")
+        visible = [str(k).split("##", 1)[1] for k in getattr(self, "plot_data", {})
+                   if "##" in str(k) and self.raw_visibility.get(k, True)]
+        ax.set_xlabel("Photon energy (eV)" if visible and all(map(is_measurement_path, visible))
+                      else "Data index / photon energy (eV)" if any(map(is_measurement_path, visible))
+                      else "Data index")
 
     def update_plot_raw(self):
         try:

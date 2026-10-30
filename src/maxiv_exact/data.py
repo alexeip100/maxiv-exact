@@ -10,6 +10,7 @@ import logging
 import json
 import sys
 from . import hdf5_loading as h5load
+from .hdf5_curve_type import is_plottable_dtype
 logger = logging.getLogger(__name__)
 from importlib.resources import files
 from PyQt6.QtWidgets import QApplication, QFileDialog, QTreeWidgetItem, QDialog, QMessageBox
@@ -1106,7 +1107,7 @@ class DataMixin:
             if isinstance(h5_obj, h5py.Group) and h5_obj.keys():
                 child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
                 child_item.addChild(QTreeWidgetItem(["(click to expand)"]))
-            elif isinstance(h5_obj, h5py.Dataset) and h5_obj.ndim == 1:
+            elif isinstance(h5_obj, h5py.Dataset) and h5_obj.ndim == 1 and is_plottable_dtype(h5_obj.dtype):
                 key = f"{abs_path}##{hdf5_path}"
                 state = Qt.CheckState.Checked if getattr(self, "raw_visibility", {}).get(key, False) else Qt.CheckState.Unchecked
                 child_item.setCheckState(0, state)

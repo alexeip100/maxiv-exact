@@ -27,6 +27,7 @@ from .plotting import PlottingMixin
 from .ui_treeviews import TreeViewMixin
 from .export import ExportMixin
 from .library import LibraryMixin
+from .self_absorption_controller import SelfAbsorptionMixin
 from .channel_setup import ChannelConfigManager, ChannelSetupDialog
 from .widgets.busy_spinner import BusySpinner
 import re
@@ -86,9 +87,45 @@ class _SeparatedReferenceTabBar(_SelectionAwareTabBar):
         return hint
 
 
-class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, ExportMixin, LibraryMixin, QMainWindow):
+class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, ExportMixin, LibraryMixin, SelfAbsorptionMixin, QMainWindow):
 
     CURVE_SIDEBAR_FRACTION = 0.25
+
+    def closeEvent(self, event):  # noqa: N802
+        # Help browsers are modeless windows; the main usage browser has no
+        # Qt parent, so explicitly close it when the application window closes.
+        for attr in ("_help_dialog", "_whats_new_dialog"):
+            window = getattr(self, attr, None)
+            if window is not None:
+                try:
+                    window.close()
+                except RuntimeError:  # Qt may already have deleted the window
+                    pass
+        # Modeless SA windows remain owned by EXACT, not independent apps.
+        # Close all of them when the main application window is closed.
+        for window in list(getattr(self, "_self_absorption_windows", ())):
+            try:
+                window.close()
+            except RuntimeError:  # Qt may already have deleted the window
+                pass
+        fl = getattr(self, "_fl_map_window", None)
+        if fl is not None:
+            try: fl.close()
+            except RuntimeError: pass
+        return super().closeEvent(event)
+
+    def open_fl_map_dialog(self):
+        """Open or focus a standalone, modeless fluorescence map workspace."""
+        window = getattr(self, "_fl_map_window", None)
+        if window is None:
+            from .widgets.fluorescence_map_dialog import FLMapDialog
+            window = FLMapDialog(parent=self)
+            window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            self._fl_map_window = window
+            window.destroyed.connect(lambda *_: setattr(self, "_fl_map_window", None))
+        window.show()
+        window.raise_()
+        window.activateWindow()
 
     def _set_tree_all_checked(self, tree, checked: bool):
         """Set all top-level curve groups checked/unchecked using existing tree handlers."""
@@ -781,6 +818,19 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         )
         self.proc_controls_top_layout.addWidget(self.chk_group_bg_slope)
         self.proc_controls_top_layout.addStretch()
+
+        # One compact launcher; FL map analysis is available without a selected PFY curve.
+        self.fy_analysis_button = QToolButton()
+        self.fy_analysis_button.setText("FY Analysis")
+        self.fy_analysis_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.fy_analysis_menu = QMenu(self.fy_analysis_button)
+        self.fl_map_action = self.fy_analysis_menu.addAction("FL Map Analysis…")
+        self.fl_map_action.triggered.connect(self.open_fl_map_dialog)
+        self.sa_correction_action = self.fy_analysis_menu.addAction("SA Correction…")
+        self.sa_correction_action.setEnabled(False)
+        self.sa_correction_action.triggered.connect(self.open_self_absorption_dialog)
+        self.fy_analysis_button.setMenu(self.fy_analysis_menu)
+        self.proc_controls_top_layout.addWidget(self.fy_analysis_button)
 
         self.pass_button = QPushButton("Pass")
         self.proc_controls_top_layout.addWidget(self.pass_button)
@@ -1762,6 +1812,11 @@ def launch():
     """Launch the GUI (backwards-compatible helper)."""
     import sys
     from PyQt6 import QtWidgets
+    # Legacy entry point: initialize optional WebEngine before QApplication.
+    try:
+        from PyQt6.QtWebEngineWidgets import QWebEngineView  # noqa: F401
+    except ImportError:
+        pass
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
     win = MainWindow()
     win.show()

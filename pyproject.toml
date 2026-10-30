@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "maxiv-exact"
-version = "2.5.2"
+version = "2.6.0"
 description = "MAX IV EXACT — Exploration of X-ray Absorption: Characterization and Treatment."
 readme = "README.md"
 requires-python = ">=3.14"
@@ -20,6 +20,7 @@ classifiers = [
 ]
 dependencies = [
   "PyQt6>=6.11",
+  "PyQt6-WebEngine>=6.9",
   "matplotlib>=3.11.2",
   "numpy>=2.5.3",
   "scipy>=1.18.1",
@@ -43,4 +44,4 @@ where = ["src"]
 include = ["maxiv_exact*"]
 
 [tool.setuptools.package-data]
-maxiv_exact = ["docs/*.md", "docs/*.json", "library.h5", "example_data/*", "assets/*.ico", "assets/*.icns", "assets/*.png", "resources/*.h5"]
+maxiv_exact = ["docs/*.md", "docs/*.json", "library.h5", "example_data/*", "assets/*.ico", "assets/*.icns", "assets/*.png", "resources/*.h5", "resources/mathjax/*.js", "resources/mathjax/*.txt"]

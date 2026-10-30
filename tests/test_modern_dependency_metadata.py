@@ -46,7 +46,6 @@ def test_readme_documents_conda_qt6_install_without_pip_dependencies():
 
 def test_packaging_metadata_is_current():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert 'version = "2.5.2"' in pyproject
     assert 'license = "MIT"' in pyproject
     assert 'license = { text = "MIT" }' not in pyproject
     assert '"Programming Language :: Python :: 3.14"' in pyproject
@@ -57,3 +56,12 @@ def test_numpy_compatibility_helper_no_longer_targets_numpy1():
     assert "np.trapezoid" in compat
     assert "np.trapz" not in compat
     assert 'getattr(np, "trapezoid"' not in compat
+
+
+def test_package_and_project_versions_agree():
+    """Release-independent version check; do not freeze an old build number."""
+    import tomllib
+    from maxiv_exact import __version__
+
+    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert metadata["project"]["version"] == __version__

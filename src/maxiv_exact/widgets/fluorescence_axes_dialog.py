@@ -1,0 +1,37 @@
+"""Calibration controls for the fluorescence map workspace."""
+from PyQt6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QLabel,QDoubleSpinBox,QCheckBox,QDialogButtonBox,QComboBox,QPushButton)
+
+
+def build_axes_dialog(owner):
+    owner.axes_dialog=QDialog(owner)
+    owner.axes_dialog.setWindowTitle('Energy calibration — FL Map Analysis')
+    layout=QVBoxLayout(owner.axes_dialog)
+    owner.energy_source_label=QLabel('Incident source: Not calibrated — scan index')
+    layout.addWidget(owner.energy_source_label)
+    row=QHBoxLayout();layout.addLayout(row)
+    row.addWidget(QLabel('Master energy channel:'))
+    owner.master_channel=QComboBox();owner.master_channel.addItems(['pcap_energy_av (measured)','mono_traj_energy (nominal)'])
+    owner.master_channel.setEnabled(False);owner.master_channel.currentIndexChanged.connect(owner._choose_master_channel)
+    row.addWidget(owner.master_channel)
+    associate=QPushButton('Associate master scan…');associate.clicked.connect(owner.associate_master);row.addWidget(associate)
+    row=QHBoxLayout();layout.addLayout(row)
+    row.addWidget(QLabel('Manual incident range (eV):'))
+    owner.e_start=QDoubleSpinBox();owner.e_end=QDoubleSpinBox()
+    for widget in (owner.e_start,owner.e_end):
+        widget.setRange(-100000,100000);widget.setDecimals(3);widget.setSingleStep(.1)
+        widget.valueChanged.connect(owner._update_calibration);row.addWidget(widget)
+    owner.use_incident_ev=QCheckBox('Incident axis: eV');owner.use_incident_ev.setChecked(False)
+    owner.use_incident_ev.toggled.connect(owner._incident_axis_changed);row.addWidget(owner.use_incident_ev)
+    layout.addWidget(QLabel('Editing the manual endpoints replaces the master association for this map.'))
+    row=QHBoxLayout();layout.addLayout(row)
+    row.addWidget(QLabel('Fluorescence detector scale / offset:'))
+    owner.det_slope=QDoubleSpinBox();owner.det_slope.setDecimals(6);owner.det_slope.setRange(.001,100.);owner.det_slope.setValue(.9235)
+    owner.det_offset=QDoubleSpinBox();owner.det_offset.setDecimals(3);owner.det_offset.setRange(-10000,10000);owner.det_offset.setValue(11.81)
+    for widget in (owner.det_slope,owner.det_offset):
+        widget.valueChanged.connect(owner._detector_calibration_changed);row.addWidget(widget)
+    owner.use_detector_ev=QCheckBox('FL axis: eV');owner.use_detector_ev.setChecked(True)
+    owner.use_detector_ev.toggled.connect(owner._detector_axis_changed);row.addWidget(owner.use_detector_ev)
+    layout.addWidget(QLabel('Calibration changes displayed coordinates only; the source HDF5 files are not modified.'))
+    buttons=QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+    buttons.rejected.connect(owner.axes_dialog.close);buttons.accepted.connect(owner.axes_dialog.close)
+    layout.addWidget(buttons)

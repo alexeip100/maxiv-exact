@@ -1,8 +1,11 @@
----
+## [2.6.0] – 2026-10-30
 
-# MAX IV EXACT changelog
-
----
+### Added
+- **FL Map Analysis:** Explore energy-dispersive fluorescence maps, inspect detector spectra, and select fluorescence-energy ROIs to compare excitation (XAS) spectra.
+- **Fluorescence peak fitting:** Fit emission peaks in a reference spectrum, follow their contributions across incident-energy scans, and view fitted, residual and component maps.
+- **Master-scan energy association:** Retrieve incident photon-energy coordinates from the corresponding master HDF5 entry automatically, with manual association or calibration when needed.
+- **Transfer and export:** Send measured ROI excitation spectra or fitted fluorescence peak-area spectra to Processed Data; export and save fluorescence analysis results.
+- **General 1D HDF5 viewing:** Plot individually selected numerical datasets outside measurement groups in Raw Data, including instrument metadata.
 
 ## [2.5.2] – 2026-10-01
 
@@ -356,3 +359,47 @@
 - Improved stability of background subtraction toggle (`Subtract background?`) for manual BG in case of summed curves.
 
 
+
+### 2.5.3a1 build 13, Fix 3 — map window usability
+- Stop shrinking detector-spectrum axes during repeated selection drags: fixed subplot spacing and in-axes legend anchoring.
+- Adopt PANDA's visual colormap chooser (gradient swatches, extended palettes) via map right-click.
+- No SA correction or peak-fitting algorithm changes.
+
+### 2.5.3a1 build 13, Fix 4 — FY intensity autoscaling
+- Autoscale the lower FY excitation trace intensity after changing the fluorescence ROI or moving a selection. Preserve the current incident-energy X-axis zoom.
+- No change to detector fitting or SA algorithms.
+
+### 2.5.3a1 build 14, Fix 3 — map navigation and responsiveness
+- Preserve Matplotlib map axes during selection redraws so Home/zoom history remains valid.
+- Coalesce mouse-drag redraws using a short Qt timer, retaining exact final cursor coordinates.
+- Label residual views by pass and use a consistent comparison scale.
+- Keep batch fits in their existing QThread and limit BLAS thread oversubscription when available.
+- No changes to self-absorption algorithms.
+
+### 2.5.3a1 build 14 Fix 7 (development)
+- Synchronize marker drag positions/areas with the reference peak table during mouse motion.
+- Keep batch progress visually filled in blue with an explicit progress-bar chunk style.
+- Rename and enable by default the fluorescence and incident-energy eV axis toggles.
+- Follow current editable peak labels in Trends and widen the trend-peak selector.
+
+### 2.5.3a1 build 14 Fix 8 (development)
+- Add All selection to trends, applying the chosen polynomial degree to every peak's selected parameter.
+- Add cooperative Abort for active batch fits, retaining previously completed results.
+- Accelerate batch peak-area solves when the unconstrained solution is nonnegative.
+- Clarify that interactive fitting uses the displayed averaged detector spectrum.
+- Keep the incident-energy eV toggle enabled when loading indexed Xspress3 maps.
+
+### 2.5.3a1 build 14 Fix 9 (development)
+- Add optional soft Gaussian FWHM restraint in fluorescence fitting: no penalty inside the default 80–160 eV interval and quadratic penalty outside with default softness 40 eV.
+- Expose editable lower/upper preferred widths and softness in FL Map Analysis; apply to free widths in single and Pass-1 batch nonlinear fitting, in calibrated detector eV.
+- Preserve existing fixed-width fitting and trend-locked Pass 2 behavior. Keep minimal hard optimizer limits for numerical stability.
+
+### 2.5.3a1 build 14 Fix 10 (development)
+- Validate FL peak table edits: reject negative integrated areas, non-finite numerical entries, nonpositive widths, and out-of-range centers; restore the last accepted value in the table.
+- Preserve soft FWHM preferences; widths outside the preferred range remain permitted.
+
+## Development build 14 — Fix 10 (2026-10-28)
+
+- Reject invalid interactive fluorescence peak-table edits rather than silently clamping internal values while leaving invalid text visible.
+- Restore previous accepted values for negative/nonfinite peak areas, nonpositive/nonfinite FWHM values, nonfinite centers and centers outside the detector-energy range; display a concise status diagnostic.
+- Keep the agreed 80–160 eV soft FWHM interval unchanged: widths outside it remain permitted.

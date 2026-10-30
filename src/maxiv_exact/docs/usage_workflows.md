@@ -91,6 +91,16 @@ For a quick global visibility change, use **Check all / Uncheck all** below the 
 
 ---
 
+## Inspect other 1D HDF5 datasets (metadata and diagnostics)
+
+1. Open an HDF5 file and expand its hierarchy in **HDF5 Structure** only as far as necessary.
+2. Check an individual **numeric or Boolean 1D** dataset, even when it is not under `measurement`. For example, `Scan_5270/Metadata/I0 instant current/READ/value` may contain two measured values.
+3. In **Raw Data**, these generic curves are plotted against their **data index**. Do not interpret that index as photon energy or assume that two values mean the beginning and end of a scan unless their acquisition metadata establishes it.
+4. These generic arrays are **for inspection**, not for XAS-specific Processed Data calculations. For normal XAS measurement channels, use the standard family/channel selectors and photon-energy workflow instead.
+
+
+---
+
 # Process spectra
 
 ## Understand the processing order
@@ -309,6 +319,41 @@ If requirements are met, curves are sent into the decomposition window where you
 
 ---
 
+# Analyze fluorescence-detector maps (FL Map Analysis)
+
+Use this workflow to examine an energy-dispersive fluorescence detector map, compare excitation spectra from different fluorescence ROIs, and optionally fit emission peaks across the incident-energy scan. This is **different from SA Correction**, which is still experimental.
+
+## First map: measured ROI spectra (no fitting needed)
+
+1. In the main EXACT window, open the **master scan HDF5** as usual if you have it; the file may contain many entries. Choose **Processed Data → FY Analysis → FL Map Analysis…**. You do **not** need a PFY curve selected to open the map window.
+2. In the FL Map window select **File → Open HDF5…** (or drop the detector HDF5 into the window). For a detector file named, for example, `XAS_SH1_spectrum_for_entry5270.h5`, EXACT can match `entry5270` in the already loaded master file if the identifier and scan-point counts agree. It prefers the measured `pcap_energy_av` incident-energy array, with `mono_traj_energy` as a fallback.
+3. **Verify the incident axis** before interpreting the spectrum as XAS. If no trustworthy association was found, the horizontal axis uses **scan indices**. Use **File → Associate master scan…** and choose the appropriate entry, or open **Axes → Calibration…**. If measured and nominal energy arrays are present, select the appropriate one. Manual first/last energy endpoints are a fallback when a corresponding master scan is unavailable; they impose a linear scale and cannot reproduce nonuniform steps.
+4. In **Map display**, choose **Original**. Select a fluorescence feature using the horizontal guide on the 2D map or **Excitation spectrum → FL E**; adjust **ROI ± ch**. The curve *under* the map is the sum of measured detector counts within that ROI at each incident point. The **Vertical/Horizontal** guide checkboxes affect guide visibility, not the underlying selection.
+5. To compare different ROIs, choose **File → Send ROI spectrum to Processed Data** after the incident axis is calibrated. Move/change the ROI, then send another. Each sent curve is an **independent snapshot**, labeled with its fluorescence ROI and the verified master entry if one exists. The command is disabled for **Fitted**, **Residual**, and **Component** map views to avoid ambiguity about which data are transferred.
+6. Return to the main **Processed Data** tab to compare or further process the curves. The transferred intensities are **not I₀-normalized** automatically; choose any normalization/background treatment deliberately. Do not interpret differences between ROI-derived XAS shapes as chemical differences without checking the spectral contributions and measurement conditions.
+
+**Tip:** **Detector spectrum → Incident E / Avg ±** selects and averages neighboring incident positions for the *emission spectrum shown on the right*; **Excitation spectrum → FL E / ROI ± ch** defines the fluorescence-channel integral for the *excitation spectrum below the map*. These are independent selections.
+
+## Fit fluorescence peaks across the map
+
+1. Choose a representative incident position and inspect the detector spectrum on the right. EXACT can offer initial peak guesses; these are starting values, **not element identifications**. Add/remove peaks, adjust centers, areas, and FWHM in the table, and choose which center/width parameters are free.
+2. Press **Fit spectrum** and examine the agreement of the Gaussian model (and constant/linear background) with the measured emission spectrum. Use **Undo fit** when appropriate. **Fit settings…** lets you choose background behavior, optional incident-bin grouping, and a soft preferred FWHM interval.
+3. Press **Fit map** to fit spectra across incident-energy bins using the reference configuration. Wait for the progress indicator; **Abort** discards an incomplete operation. **Map display → Fitted / Residual / Component** becomes useful after fitting. Choose a **Pass** and component to inspect the reconstructed maps.
+4. Use **Trends…** to inspect how fitted areas, centers, and widths evolve with incident energy. If suitable, configure polynomial trends and run optional trend-constrained **Pass 2**; compare results with independent **Pass 1**. Trend constraints are not evidence that the underlying components are physically unique.
+5. Use **File → Send fitted spectra to Processed Data…** to select fitted component curves. Unlike measured ROI transfer, this command requires map-fitting results. It does not apply I₀ normalization. For files or colleagues needing the fit results, use **Export fitted spectra (CSV)…** or **Save fitted analysis (HDF5)…**. Peak configurations can be loaded/saved separately.
+
+**Beware of binning:** fitting may combine neighboring incident spectra. The fitted curves therefore follow the analysis bin coordinates and the exported/integrated fitted signals may not be directly identical to an unbinned measured ROI trace.
+
+**Controls used (What is what?):** *FY Analysis*, *FL Map Analysis*, *Map display*, *Fit display*, *Axes/Calibration*, *ROI ± ch*, *Fit spectrum*, *Fit map*, *Trends*, *Send ROI spectrum*, *Send fitted spectra*.
+
+---
+
+# SA Correction (experimental)
+
+**SA Correction…** is a **work in progress**, not a released or validated correction method. The button is enabled only for eligible PFY/I₀-normalized Processed Data conditions and asks for confirmation before opening the experimental window. Its numerical results should be treated as exploratory, and it does not automatically replace data in the main analysis.
+
+---
+
 # Troubleshooting and a safe first workflow
 
 ## If the result looks wrong
@@ -338,3 +383,6 @@ If a processing choice creates a feature you did not see in the raw data, compar
 10. Export the processed numerical data as well as any figure you make, so the analysis remains reproducible outside EXACT.
 
 This is a starting workflow, not a compulsory recipe. XAS processing choices depend on the experiment and the scientific question; EXACT deliberately keeps the raw and processed views accessible so you can judge those choices rather than hide them.
+
+
+---

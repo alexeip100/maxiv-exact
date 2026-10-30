@@ -12,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..data import lookup_energy
+from ..hdf5_curve_type import is_measurement_path
 from .. import processing
 from .. import hdf5_loading as h5load
 
@@ -108,6 +109,27 @@ class ProcessedPlotMixin:
         return None, None
 
     def update_plot_processed(self):
+        # Keep the isolated self-absorption launcher in sync with Processed Data state.
+        try:
+            if hasattr(self, "update_self_absorption_action_state"):
+                self.update_self_absorption_action_state()
+        except Exception:
+            pass
+        # Generic 1D HDF5 metadata are available only in the Raw Data viewer.
+        # Never reinterpret their indices as photon energies for XAS processing.
+        if any("##" in str(key) and not is_measurement_path(str(key).split("##", 1)[1])
+               for key in getattr(self, "plot_data", {})
+               if getattr(self, "raw_visibility", {}).get(key, False)):
+            try:
+                self.proc_ax.clear()
+                self.canvas_proc.draw()
+            except Exception:
+                pass
+            try:
+                self.update_pass_button_state()
+            except Exception:
+                pass
+            return
         # Preserve existing behaviour by keeping the logic identical to the pre-split version.
         try:
             self.proc_ax.clear()

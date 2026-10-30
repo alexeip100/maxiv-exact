@@ -489,7 +489,9 @@ def _parse_changelog_sections(md: str):
     versions = []
     for tag, d, block in blocks:
         if tag.lower() == "unreleased":
-            unreleased = block
+            # Development entries may follow before the first public release.
+            # Keep only the user-facing Unreleased section.
+            unreleased = re.split(r"^## (?!\[)", block, maxsplit=1, flags=re.M)[0].strip()
         else:
             versions.append((tag, d, block))
 
@@ -521,7 +523,7 @@ def build_whats_new_markdown(current_version: str, max_versions: int = 5) -> tup
     if not md:
         return ("# What's new\n\n**Changelog could not be loaded.**\n", "")
 
-    _unrel, versions = _parse_changelog_sections(md)
+    unreleased, versions = _parse_changelog_sections(md)
     if not versions:
         return ("# What's new\n\n**No released versions found in changelog.**\n", "")
 
@@ -555,6 +557,21 @@ def build_whats_new_markdown(current_version: str, max_versions: int = 5) -> tup
     out.append("# What's new")
     out.append("These are the latest changes recorded in the packaged changelog.")
     out.append("")
+    # The preview is not a released version. Keep the latest released version
+    # as the return value used by the installed-version consistency check.
+    if unreleased:
+        preview_lines = unreleased.splitlines()[1:]
+        if any(line.strip() for line in preview_lines):
+            out.append("### Upcoming 2.6.0 — development preview")
+            out.append("")
+            # The changelog block itself supplies the content; do not include
+            # the internal [Unreleased] heading or duplicate the preview title.
+            preview_content = "\n".join(preview_lines).strip()
+            preview_content = re.sub(r"^### Coming in 2\.6\.0 \(development\)\s*$", "", preview_content, count=1, flags=re.M).strip()
+            out.append(preview_content)
+            out.append("")
+            out.append("---")
+            out.append("")
 
     # Create version headings as H3 so TOC shows versions (H3 is used by the Usage TOC style).
     for idx, (tag, d, block) in enumerate(top):

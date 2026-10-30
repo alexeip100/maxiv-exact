@@ -4,6 +4,7 @@ channels:
 dependencies:
   - python=3.14
   - pyqt6>=6.11
+  - pyqt6-webengine
   - numpy>=2.5.3
   - scipy>=1.18.1
   - matplotlib>=3.11.2

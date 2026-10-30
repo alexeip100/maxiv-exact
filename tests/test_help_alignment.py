@@ -110,5 +110,6 @@ def test_help_explains_unavailable_coherent_channel():
 
 def test_help_search_selection_is_high_contrast_yellow():
     mixin = (ROOT / "src" / "maxiv_exact" / "plotting" / "mixin_core.py").read_text(encoding="utf-8")
-    assert mixin.count("selection-background-color: #ffeb3b") >= 2
-    assert mixin.count("selection-color: #111111") >= 2
+    viewer = (ROOT / "src" / "maxiv_exact" / "widgets" / "mathjax_help_browser.py").read_text(encoding="utf-8")
+    assert "::selection{background:#ffeb3b;color:#111111}" in viewer
+    assert 'MathJaxHelpBrowser("CHANGELOG.md"' in mixin  # What's New shares the MathJax renderer

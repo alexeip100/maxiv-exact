@@ -26,7 +26,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTextDocument, QKeySequence, QFont, QShortcut
 
 from ..widgets.help_browser import HelpBrowser
-from ..utils.help_text import get_usage_html, get_whats_new_payload
+from ..widgets.mathjax_help_browser import MathJaxHelpBrowser
+from ..utils.help_text import get_usage_html, get_whats_new_payload, build_whats_new_markdown
 
 
 class CorePlottingMixin:
@@ -458,34 +459,19 @@ class CorePlottingMixin:
 
         _set_toc_style(font_spin.value())
 
-        browser = HelpBrowser()
+        browser = MathJaxHelpBrowser(md_filename, base_px=17)
         browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        browser.setStyleSheet("font-size: 17px; selection-background-color: #ffeb3b; selection-color: #111111;")
         browser.setMinimumWidth(380)
-        browser.setHtml(usage_html)
 
         def _do_help_search(backward: bool = False):
-            text = (search_edit.text() or "").strip()
-            if not text:
+            term = (search_edit.text() or "").strip()
+            if not term:
+                browser.find_help("", backward=False)
                 return
-            flags = QTextDocument.FindFlag.FindBackward if backward else QTextDocument.FindFlag(0)
-            try:
-                found = browser.find(text, flags)
-            except Exception:
-                found = False
-            if not found:
-                try:
-                    cursor = browser.textCursor()
-                    cursor.movePosition(cursor.End if backward else cursor.Start)
-                    browser.setTextCursor(cursor)
-                    found = browser.find(text, flags)
-                except Exception:
-                    found = False
-            if not found:
-                try:
-                    QMessageBox.information(dlg, "Search", f'No matches for "{text}".')
-                except Exception:
-                    pass
+            def _result(found):
+                if not found:
+                    QMessageBox.information(dlg, "Search", f'No matches for "{term}".')
+            browser.find_help(term, backward, _result)
 
         try:
             next_btn.clicked.connect(lambda: _do_help_search(False))
@@ -569,19 +555,8 @@ class CorePlottingMixin:
         layout.addWidget(splitter, 1)
 
         def _apply_help_font(px: int):
-            try:
-                px = int(px)
-            except Exception:
-                px = 17
-            try:
-                browser.setStyleSheet(f"font-size: {px}px;")
-                browser.setHtml(get_usage_html(md_filename, px))
-            except Exception:
-                pass
-            try:
-                _set_toc_style(px)
-            except Exception:
-                pass
+            browser.set_base_font(int(px))
+            _set_toc_style(int(px))
 
         font_spin.valueChanged.connect(_apply_help_font)
         dlg.show()
@@ -607,9 +582,9 @@ class CorePlottingMixin:
             current_version = ""
 
         try:
-            usage_html, latest_version = get_whats_new_payload(current_version=current_version, max_versions=max_versions)
+            whats_new_md, latest_version = build_whats_new_markdown(current_version=current_version, max_versions=max_versions)
         except Exception:
-            usage_html, latest_version = ("<p><b>Changelog could not be loaded.</b></p>", "")
+            whats_new_md, latest_version = ("# What\'s new\n\nChangelog could not be loaded.", "")
 
         # If changelog does not start with the current version, warn the user.
         try:
@@ -624,7 +599,23 @@ class CorePlottingMixin:
             pass
 
         # Reuse the same dialog layout as Usage (TOC/search/font-size)
-        dlg = QDialog(self)
+        existing = getattr(self, "_whats_new_dialog", None)
+        if existing is not None:
+            try:
+                if existing.isVisible():
+                    existing.raise_()
+                    existing.activateWindow()
+                    return
+            except RuntimeError:
+                pass
+        dlg = QDialog(self, Qt.WindowType.Window)
+        dlg.setModal(False)
+        dlg.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        self._whats_new_dialog = dlg
+        def _forget_whats_new(*_args):
+            if getattr(self, "_whats_new_dialog", None) is dlg:
+                self._whats_new_dialog = None
+        dlg.destroyed.connect(_forget_whats_new)
         dlg.setWindowTitle("What's new — EXACT")
         dlg.resize(900, 650)
         dlg.setSizeGripEnabled(True)
@@ -699,62 +690,27 @@ class CorePlottingMixin:
         toc.setMinimumWidth(200)
         toc.setMaximumWidth(360)
 
-        browser = HelpBrowser()
+        browser = MathJaxHelpBrowser("CHANGELOG.md", markdown_source=whats_new_md, base_px=18)
         browser.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        browser.setStyleSheet("font-size: 18px; selection-background-color: #ffeb3b; selection-color: #111111;")
-        browser.setHtml(usage_html)
+        
 
         def _do_help_search(backward: bool = False):
-            text = (search_edit.text() or "").strip()
-            if not text:
+            term = (search_edit.text() or "").strip()
+            if not term:
+                browser.find_help("", False)
                 return
-            flags = QTextDocument.FindFlag.FindBackward if backward else QTextDocument.FindFlag(0)
-            try:
-                found = browser.find(text, flags)
-            except Exception:
-                found = False
+            def _result(found):
+                if not found:
+                    QMessageBox.information(dlg, "Search", f'No matches for "{term}".')
+            browser.find_help(term, backward, _result)
 
-            if not found:
-                try:
-                    cursor = browser.textCursor()
-                    cursor.movePosition(cursor.End if backward else cursor.Start)
-                    browser.setTextCursor(cursor)
-                    found = browser.find(text, flags)
-                except Exception:
-                    found = False
-
-            if not found:
-                try:
-                    QMessageBox.information(dlg, "Search", f'No matches for "{text}".')
-                except Exception:
-                    pass
-
-        def _search_next():
-            _do_help_search(backward=False)
-
-        def _search_prev():
-            _do_help_search(backward=True)
-
-        next_btn.clicked.connect(_search_next)
-        prev_btn.clicked.connect(_search_prev)
-
-        def _on_return_pressed():
-            # Enter: next; Shift+Enter: previous
-            try:
-                if QApplication.keyboardModifiers() & Qt.KeyboardModifier.ShiftModifier:
-                    _search_prev()
-                else:
-                    _search_next()
-            except Exception:
-                _search_next()
-
-        search_edit.returnPressed.connect(_on_return_pressed)
-
-        # Ctrl+F focuses search
-        try:
-            QShortcut(QKeySequence.StandardKey.Find, dlg, activated=lambda: search_edit.setFocus())
-        except Exception:
-            pass
+        next_btn.clicked.connect(lambda: _do_help_search(False))
+        prev_btn.clicked.connect(lambda: _do_help_search(True))
+        search_edit.returnPressed.connect(lambda: _do_help_search(False))
+        QShortcut(QKeySequence.StandardKey.Find, dlg, activated=lambda: (search_edit.setFocus(), search_edit.selectAll()))
+        QShortcut(QKeySequence("F3"), dlg, activated=lambda: _do_help_search(False))
+        QShortcut(QKeySequence("Shift+F3"), dlg, activated=lambda: _do_help_search(True))
+        QShortcut(QKeySequence("Shift+Return"), dlg, activated=lambda: _do_help_search(True))
 
         # Build TOC from extracted heading anchors (H1/H2/H3)
         try:
@@ -818,14 +774,19 @@ class CorePlottingMixin:
             except Exception:
                 px = 18
             try:
-                browser.setStyleSheet(f"font-size: {px}px;")
+                browser.set_base_font(px)
             except Exception:
                 pass
             _set_toc_style(max(10, int(px * 0.78)))
 
         font_spin.valueChanged.connect(_apply_font)
 
-        dlg.exec()
+        dlg.show()
+        try:
+            dlg.raise_()
+            dlg.activateWindow()
+        except Exception:
+            pass
     def clear_all_except_plotted(self):
         if hasattr(self, "tree"):
             for i in range(self.tree.topLevelItemCount()):

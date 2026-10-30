@@ -1,5 +1,5 @@
 # Application overview
-MAX IV EXACT is a GUI tool for inspecting, processing, comparing, and decomposing **1D X-ray absorption spectra** stored in HDF5 files. It is developed around FlexPES/MAX IV data, with configurable channel profiles for other compatible HDF5 naming conventions.
+MAX IV EXACT is a GUI tool for inspecting, processing, comparing, and decomposing **1D X-ray absorption spectra** stored in HDF5 files. It also supports **fluorescence-detector map analysis** and viewing individual numeric 1D datasets elsewhere in HDF5 files. It is developed around FlexPES/MAX IV data, with configurable channel profiles for other compatible HDF5 naming conventions.
 
 You can use it to:
 - browse HDF5 content safely (tree items are **lazy-loaded** as you expand them),
@@ -141,7 +141,7 @@ Tree nodes are populated only when expanded. This keeps large files responsive.
 Clicking on 0d data (like metadata strings or scalars) shows their values in a field under the plot on the Raw Data tab.
 
 ### Checking items
-Checking a 1d dataset (toggling specific check boxes) affects what is considered “visible” and can contribute curves to Raw/Processed plots.
+Checking a supported 1D measurement dataset makes it available for the usual Raw Data and XAS processing workflows. Individually checked numeric or Boolean 1D datasets outside `measurement` can be plotted in **Raw Data** against data index, but are **not** sent to XAS-specific Processed Data operations.
 
 ### Closing a single file
 Right-click a top-level file item → **Close** (with confirmation). Alternatively, select the HDF5 file to close and press “Delete”. 
@@ -268,6 +268,10 @@ Sometimes Auto polynomial backgrounds are “good enough” curve-by-curve, but 
 Match pre-edge can improve consistency, but it does so by allowing a more flexible adjustment of the background specifically to make the pre-edge align. Sanity-check that you are not introducing artificial structures or distorting real low-energy features. A good practice is to toggle it on/off and confirm that the edge-region features you care about remain stable.
 
 **See also (How to):** *Compare multiple curves consistently (Group BG)*
+
+#### **FY Analysis**
+
+**FY Analysis** opens a menu with **FL Map Analysis…** and **SA Correction…**. **FL Map Analysis…** opens an independent fluorescence-detector-map window: inspect the 2D map and emission spectra, select fluorescence ROIs to obtain excitation spectra, and optionally fit emission peaks across the scan. You can send measured ROI spectra or fitted peak-area spectra to Processed Data. A fit is not required to explore ROIs. See **FY Analysis: fluorescence maps and experimental correction** below for the controls, and **How to? → Analyze fluorescence-detector maps (FL Map Analysis)** for the guided workflow. **SA Correction…** is experimental and still work in progress; it displays a confirmation warning before opening.
 
 #### **Pass**
 Sends the current processed curve(s) to **Plotted Data** without clearing existing plotted curves.
@@ -464,3 +468,36 @@ Each compound curve is built from the elemental Chantler tabulations over their 
 ## Source conventions
 
 **Henke / CXRO** and **Chantler / XrayDB** remain separate source datasets. **Henke + Chantler** overlays the two independent curves; EXACT does not average or merge them. For `f₁`, the overlay compares Henke's tabulated full `f₁` with `Z + f′` derived from Chantler/XrayDB. The bundled database is local and frozen, so normal use of the Reference tab does not require internet access.
+
+
+---
+
+# FY Analysis: fluorescence maps and experimental correction
+
+The **FY Analysis** menu is in **Processed Data**. It contains **FL Map Analysis…** (the fluorescence-detector workflow described below) and **SA Correction…** (an experimental, work-in-progress tool). FL Map Analysis can be opened without selecting a PFY curve in Processed Data.
+
+## FL Map Analysis: layout and controls
+
+**FL Map Analysis** is a separate window for energy-dispersive fluorescence-detector maps. A map contains successive detector spectra recorded at different incident photon energies. On the left, the 2D map has **incident energy or scan index** horizontally and **fluorescence detector channel or calibrated emission energy** vertically. The lower trace is the excitation spectrum integrated over the selected fluorescence ROI. On the right, the averaged detector spectrum is shown together with peak-fitting controls and a peak-parameter table.
+
+- **File → Open HDF5…** loads a fluorescence detector file; drag-and-drop is also supported. **Reload same** reloads the source and **Close HDF5** closes it. The fluorescence file need not contain incident-energy metadata.
+- **Detector spectrum → Incident E / Avg ±** selects the incident position (nearest recorded spectrum) and the number of neighboring spectra on *each* side used to display the averaged fluorescence spectrum. The averaging does not change the original map.
+- **Excitation spectrum → FL E / ROI ± ch** selects the fluorescence center and ROI half-width in detector channels. The excitation curve below the map sums all included detector channels at each incident point; the endpoint channels are included. Move the guides on the map or edit the numeric controls to compare ROIs.
+- **Map display → Map** chooses **Original**, **Fitted**, **Residual**, or **Component** (the latter options require map-fitting results). **Component** reveals a component selector. The **Vertical** and **Horizontal** checkboxes show/hide the corresponding map guides; they do not disable ROI selection.
+- **Fit display → Pass / Model** chooses the batch-fit pass and the detector-spectrum overlay (reference configuration or batch-fit result), when available. **Axes → Ranges…** controls map display limits; **Axes → Calibration…** controls the incident-energy and detector-energy coordinates.
+- **Calibration:** with a matching master scan, EXACT prefers the valid measured `pcap_energy_av` array and can use `mono_traj_energy` instead. Without a valid energy association, the horizontal coordinate is the **scan index**, not an assumed energy range. **File → Associate master scan…** can link a detector map to a master file and entry. The calibration dialog displays the current source, lets you choose measured versus nominal master energy, and also offers manual incident endpoints. Editing manual endpoints replaces the current association for that map; reloading returns to the original source-derived state. Detector channel-to-eV calibration is **separate** from incident-energy calibration. Neither changes the source HDF5 data.
+- **Add peak / Remove peak / Fit spectrum / Undo fit** work with the displayed detector spectrum and editable Gaussian peak table. Initial automatically estimated peaks are *guesses*, not chemical identifications. **Center**, **Area**, **FWHM**, and freedom checkboxes describe the fit components; fitting a reference spectrum establishes starting parameters for a full-map fit.
+- **Fit settings…** configures the background (constant or linear), incident-spectrum bin size for map fitting, and a preferred Gaussian FWHM interval with soft penalties outside the interval. **Fit map** fits successive incident bins; the progress bar and **Abort** control the operation. **Trends…** reviews fitted peak areas/centers/widths and provides optional trend-constrained **Pass 2** after the independent **Pass 1**.
+- **File → Load/Save peak configuration…** exchanges peak-model settings. **Export fitted spectra (CSV)…** and **Save/Load fitted analysis (HDF5)…** handle fitted-analysis results. These operations differ from exporting the displayed measured ROI.
+- **File → Send ROI spectrum to Processed Data** sends a **snapshot of the measured ROI excitation spectrum**. It is enabled only for the **Original** map with a valid calibrated incident-energy axis; it never silently sends data from a different map representation. Change the ROI and repeat to compare several XAS shapes. Each transfer is independent and is **not automatically I₀-normalized**.
+- **File → Send fitted spectra to Processed Data…** offers selected fitted fluorescence components after a map fit. This is distinct from sending the directly integrated measured ROI and also does **not** apply I₀ normalization. Transferred names include the verified master entry (e.g. `entry5270`) when available.
+
+**Important:** A map's fluorescence-detector calibration (emission energy) and the incident photon-energy scale are different axes. Accurate incident energies are required before transferring curves to Processed Data. A transferred ROI is a measured *channel sum*; a fitted component is a model-derived peak signal. Neither is automatically corrected for detector-rate effects, I₀ variations, or fluorescence self-absorption.
+
+## SA Correction — work in progress
+
+**SA Correction…** is an experimental, incomplete self-absorption-correction workflow. It is available only under specific Processed Data/PFY and I₀-normalization conditions. A confirmation warning appears before opening it. It is provided for exploratory use, **not** as a validated routine correction for scientific publication. The correction does not silently replace the main-window data.
+
+## Generic 1D datasets outside measurement
+
+In **HDF5 Structure**, individually checking a supported numeric or Boolean 1D dataset outside `measurement` plots it in **Raw Data** against **data index** (0, 1, 2, …). This is useful for instrument metadata and diagnostic arrays. These datasets are *view-only* and are not interpreted as XAS spectra or sent through XAS-specific Processed Data operations. Normal measurement channels retain their existing photon-energy axes. Bulk channel-family selection remains focused on normal measurement channels, so it does not automatically select thousands of metadata items. Non-numeric, scalar, and multidimensional datasets are not treated as ordinary 1D curves.
