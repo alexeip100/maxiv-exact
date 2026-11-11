@@ -13,6 +13,7 @@ import numpy as np
 
 from ..data import lookup_energy
 from ..hdf5_curve_type import is_processed_xas_path
+from ..nexafs_fit.group import GROUP_REQUIRED
 from .. import processing
 from .. import hdf5_loading as h5load
 
@@ -108,7 +109,15 @@ class ProcessedPlotMixin:
             return None, None
         return None, None
 
+    def _set_nexafs_group(self, group=None, reason=GROUP_REQUIRED):
+        self._nexafs_group = group
+        button = getattr(self, "nexafs_fit_button", None)
+        if button is not None:
+            button.setEnabled(group is not None)
+            button.setToolTip(reason if group is None else "Open the captured Group BG spectra.")
+
     def update_plot_processed(self):
+        self._set_nexafs_group()
         # Keep the isolated self-absorption launcher in sync with Processed Data state.
         try:
             if hasattr(self, "update_self_absorption_action_state"):
@@ -194,10 +203,11 @@ class ProcessedPlotMixin:
         # Group automatic background mode for multiple selected curves
         if group_active:
             try:
-                self._plot_multiple_with_group_auto_bg()
+                group, reason = self._plot_multiple_with_group_auto_bg()
             except Exception as ex:
                 print("Group Auto BG plotting failed:", ex)
                 self._plot_multiple_no_bg()
+                group, reason = None, "Group BG processing failed for the current selection."
             try:
                 self._draw_preedge_vline(getattr(self, "_proc_last_x", None))
             except Exception:
@@ -213,6 +223,7 @@ class ProcessedPlotMixin:
                 pass
             self.update_pass_button_state()
             self.update_proc_tree()
+            self._set_nexafs_group(group, reason)
             return
 
         main_x, main_y = self.compute_main_curve()
@@ -348,8 +359,8 @@ class ProcessedPlotMixin:
             strip_outer_slashes=True,
         )
 
-    def _apply_normalization(self, abs_path, parent, y_data):
-        """Divide by the chosen I0 channel – open file briefly (non-locking)."""
+    def _apply_normalization(self, abs_path, parent, y_data, *, report=False):
+        """Divide by the chosen I0 channel, optionally reporting completion."""
         try:
             normalize = bool(self.chk_normalize.isChecked())
         except Exception:
@@ -358,7 +369,7 @@ class ProcessedPlotMixin:
             parent = self._coerce_hdf5_relative_path(parent, abs_path=abs_path)
             norm_channel = self._coerce_hdf5_relative_path(self.combo_norm.currentText(), abs_path=abs_path)
             if not norm_channel:
-                return y_data
+                return (y_data, False) if report else y_data
             norm_path = f"{parent}/{norm_channel}" if parent else norm_channel
             norm_path = self._coerce_hdf5_relative_path(norm_path, abs_path=abs_path)
             try:
@@ -376,14 +387,15 @@ class ProcessedPlotMixin:
                         try:
                             norm_data = obj[()]
                             if getattr(norm_data, "size", 0) == 0 or getattr(y_data, "size", 0) == 0:
-                                return y_data.copy()
+                                copied = y_data.copy()
+                                return (copied, False) if report else copied
                             safe = np.divide(
                                 y_data,
                                 norm_data,
                                 out=np.zeros_like(y_data, dtype=float),
                                 where=norm_data != 0,
                             )
-                            return safe
+                            return (safe, True) if report else safe
                         except Exception as ex:
                             # Avoid one console line per curve when the same problem repeats.
                             err_key = (str(abs_path), str(norm_path), str(ex))
@@ -405,10 +417,12 @@ class ProcessedPlotMixin:
                         self._normalization_error_keys = seen
                     except Exception:
                         pass
-        return y_data
+        return (y_data, not normalize) if report else y_data
 
-    def _apply_automatic_bg_new(self, main_x, main_y, deg=None, pre_edge_percent=None, ax=None, do_plot=True):
-        # (unchanged algorithm, but made robust and self-contained)
+    def _apply_automatic_bg_new(
+        self, main_x, main_y, deg=None, pre_edge_percent=None, ax=None, do_plot=True, *, report=False
+    ):
+        """Fit automatic BG, optionally reporting whether the primary fit succeeded."""
         import numpy as np
 
         if deg is None:
@@ -439,7 +453,8 @@ class ProcessedPlotMixin:
         main_y = np.asarray(main_y, dtype=float).ravel()
         N = len(main_x)
         if N == 0 or N != len(main_y):
-            return np.zeros_like(main_y, dtype=float)
+            background = np.zeros_like(main_y, dtype=float)
+            return (background, False) if report else background
 
         finite = np.isfinite(main_x) & np.isfinite(main_y)
         x_all = main_x[finite]
@@ -462,7 +477,7 @@ class ProcessedPlotMixin:
                     except Exception:
                         pass
                 self._auto_bg_line = None
-            return background
+            return (background, False) if report else background
 
         idx_end_finite = max(1, int(pre_edge_percent * Nf))
         idx_end_finite = min(idx_end_finite, Nf - 1)
@@ -511,6 +526,7 @@ class ProcessedPlotMixin:
         A2 = np.vstack([A, w * deriv_row[None, :]])
         b2 = np.concatenate([b, [w * slope_prime]])
 
+        success = True
         try:
             coeffs, *_ = np.linalg.lstsq(A2, b2, rcond=None)
             if not np.all(np.isfinite(coeffs)):
@@ -525,6 +541,7 @@ class ProcessedPlotMixin:
                     val += coeffs[kk] * (xx ** power)
                 background[i] = val
         except Exception as ex:
+            success = False
             print("Automatic BG (constrained) failed -> fallback:", ex)
             idx_end_plot = max(1, int(pre_edge_percent * N))
             idx_end_plot = min(idx_end_plot, N - 1)
@@ -593,4 +610,4 @@ class ProcessedPlotMixin:
             except Exception:
                 pass
 
-        return background
+        return (background, success) if report else background

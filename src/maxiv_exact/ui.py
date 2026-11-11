@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 
     QApplication, QMainWindow, QTreeWidget, QVBoxLayout, QWidget, QPushButton, QLabel, QHBoxLayout, QTabWidget,
     QCheckBox, QComboBox, QSpinBox, QMessageBox, QSizePolicy, QSplitter,
-    QListWidget, QMenu, QSlider, QDoubleSpinBox, QDialog,
+    QListWidget, QMenu, QSlider, QDoubleSpinBox, QDialog, QFileDialog,
     QAbstractItemView, QToolButton, QTabBar, QStyle, QStylePainter, QStyleOptionTab)
 
 # ---- Compatibility shims (Phase 2b) ---- / ----------------------------------------
@@ -27,6 +27,7 @@ from .plotting import PlottingMixin
 from .ui_treeviews import TreeViewMixin
 from .export import ExportMixin
 from .library import LibraryMixin
+from .nexafs_fit.group import GROUP_REQUIRED
 from .self_absorption_controller import SelfAbsorptionMixin
 from .channel_setup import ChannelConfigManager, ChannelSetupDialog
 from .widgets.busy_spinner import BusySpinner
@@ -92,6 +93,14 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
     CURVE_SIDEBAR_FRACTION = 0.25
 
     def closeEvent(self, event):  # noqa: N802
+        # A running fit defers its dialog close until its worker has stopped.
+        for window in list(getattr(self, "_nexafs_fit_windows", ())):
+            if not window.close():
+                if getattr(self, "_nexafs_fit_shutdown_window", None) is not window:
+                    self._nexafs_fit_shutdown_window = window
+                    window.destroyed.connect(self._continue_nexafs_close)
+                event.ignore()
+                return
         # Help browsers are modeless windows; the main usage browser has no
         # Qt parent, so explicitly close it when the application window closes.
         for attr in ("_help_dialog", "_whats_new_dialog"):
@@ -101,8 +110,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
                     window.close()
                 except RuntimeError:  # Qt may already have deleted the window
                     pass
-        # Modeless SA windows remain owned by EXACT, not independent apps.
-        # Close all of them when the main application window is closed.
+        # Close the modeless analysis windows with the main window.
         for window in list(getattr(self, "_self_absorption_windows", ())):
             try:
                 window.close()
@@ -114,6 +122,10 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
             except RuntimeError: pass
         return super().closeEvent(event)
 
+    def _continue_nexafs_close(self):
+        self._nexafs_fit_shutdown_window = None
+        QTimer.singleShot(0, self.close)
+
     def open_fl_map_dialog(self):
         """Open or focus a standalone, modeless fluorescence map workspace."""
         window = getattr(self, "_fl_map_window", None)
@@ -123,6 +135,44 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
             window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
             self._fl_map_window = window
             window.destroyed.connect(lambda *_: setattr(self, "_fl_map_window", None))
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def open_nexafs_fit_dialog(self):
+        """Open the snapshot from the current successful Group BG refresh."""
+        group = getattr(self, "_nexafs_group", None)
+        if group is None:
+            return
+
+        self._show_nexafs_fit(group)
+
+    def open_nexafs_analysis(self):
+        """Restore a complete analysis without opening the source scans."""
+        title = "Open NEXAFS analysis"
+        path, _ = QFileDialog.getOpenFileName(self, title, "", "NEXAFS analysis (*.h5 *.hdf5)")
+        if not path:
+            return
+        from .nexafs_fit.persistence import load_analysis
+
+        try:
+            analysis = load_analysis(path)
+            self._show_nexafs_fit(analysis.group, analysis=analysis)
+        except (ValueError, OSError) as error:
+            QMessageBox.warning(self, title, str(error))
+
+    def _show_nexafs_fit(self, group, *, analysis=None):
+        from .widgets.nexafs_fit_dialog import NexafsFitDialog
+
+        if not hasattr(self, "_nexafs_fit_windows"):
+            self._nexafs_fit_windows = []
+        windows = self._nexafs_fit_windows
+        window = next((item for item in windows if item.group is group), None)
+        if window is None:
+            window = NexafsFitDialog(group, parent=self, analysis=analysis)
+            window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+            windows.append(window)
+            window.destroyed.connect(lambda *_: windows.remove(window))
         window.show()
         window.raise_()
         window.activateWindow()
@@ -382,7 +432,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         # Curated tooltips keyed by attribute name on self (stable and unambiguous).
         by_attr = {
             # Main controls
-            "open_button": "Open one or more HDF5 (.h5) files with XAS/NEXAFS spectra",
+            "open_button": "Open spectra or a saved NEXAFS analysis session",
             "close_button": "Close the current HDF5 file and clear loaded data",
             "clear_button": "Clear loaded data and selections in all panels",
             "help_button": "Open the Usage help page",
@@ -566,9 +616,15 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.settings_button.clicked.connect(self.show_settings)
         self.open_close_layout.addWidget(self.settings_button)
 
-        self.open_button = QPushButton("Open HDF5")
+        self.open_button = QPushButton("File")
         self.open_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.open_button.clicked.connect(self.open_file)
+        file_menu = QMenu(self.open_button)
+        file_menu.setToolTipsVisible(True)
+        file_menu.addAction("Open HDF5 file").triggered.connect(self.open_file)
+        session_action = file_menu.addAction("Open NEXAFS analysis session")
+        session_action.setToolTip("Restore saved spectra, fits, and trends without the original scan files.")
+        session_action.triggered.connect(self.open_nexafs_analysis)
+        self.open_button.setMenu(file_menu)
         self.open_close_layout.addWidget(self.open_button)
 
         self.close_button = QPushButton("Close all")
@@ -817,6 +873,11 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
             "is consistent across the selected group"
         )
         self.proc_controls_top_layout.addWidget(self.chk_group_bg_slope)
+        self.nexafs_fit_button = QPushButton("NEXAFS Fit / Trends…")
+        self.nexafs_fit_button.setEnabled(False)
+        self.nexafs_fit_button.setToolTip(GROUP_REQUIRED)
+        self.nexafs_fit_button.clicked.connect(self.open_nexafs_fit_dialog)
+        self.proc_controls_top_layout.addWidget(self.nexafs_fit_button)
         self.proc_controls_top_layout.addStretch()
 
         # One compact launcher; FL map analysis is available without a selected PFY curve.

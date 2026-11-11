@@ -5,6 +5,7 @@ from PyQt6.QtCore import Qt
 
 from ..compat import trapezoid
 from ..data import lookup_energy
+from ..nexafs_fit.group import GROUP_REQUIRED, GroupBGSettings, capture_group
 from .. import processing
 
 
@@ -469,7 +470,9 @@ class GroupBackgroundMixin:
 
         return x_common, bgs
 
-    def _group_equalize_area_jump_and_zero_preedge(self, items_simple: dict, pre: float, match_preedge_slope: bool = False):
+    def _group_equalize_area_jump_and_zero_preedge(
+        self, items_simple: dict, pre: float, match_preedge_slope: bool = False, *, completed=None
+    ):
         """Adjust *per-spectrum* automatic backgrounds in group mode.
 
         This routine is used when multiple spectra are selected and the user
@@ -485,6 +488,8 @@ class GroupBackgroundMixin:
         Notes:
             - Backgrounds are not forced to share a common polynomial shape.
             - The correction uses an affine term (linear + constant) per spectrum.
+            - When given, `completed` collects the keys that satisfy the
+              requested constraints without falling back.
         """
         import numpy as np
 
@@ -668,6 +673,8 @@ class GroupBackgroundMixin:
                     bg_adj[f] = bg_adj_f
                     adjusted[key] = (x_use, y_use, bg_adj)
                     changed += 1
+                    if completed is not None:
+                        completed.add(key)
                     continue
                 except Exception:
                     # Fall back to the 2-parameter solution below
@@ -697,6 +704,8 @@ class GroupBackgroundMixin:
             bg_adj[f] = bg_adj_f
             adjusted[key] = (x_use, y_use, bg_adj)
             changed += 1
+            if completed is not None and not match_preedge_slope:
+                completed.add(key)
 
         msg = None
         if changed >= 2:
@@ -711,7 +720,7 @@ class GroupBackgroundMixin:
         return adjusted, msg
 
     def _plot_multiple_with_group_auto_bg(self):
-        """Plot multiple selected curves with group automatic background fitting."""
+        """Plot Group BG curves and return the eligible snapshot or its rejection reason."""
         import numpy as np
 
         self.proc_ax.clear()
@@ -725,7 +734,7 @@ class GroupBackgroundMixin:
 
         keys = self._visible_processed_keys()
         if not keys:
-            return
+            return None, GROUP_REQUIRED
 
         # Compute group backgrounds; fall back to per-spectrum if group fit is not possible
         try:
@@ -751,6 +760,8 @@ class GroupBackgroundMixin:
 
         # Compute per-spectrum Automatic BG (same as single-spectrum auto), and collect x/y.
         items = {}
+        problems = {}
+        labels = {}
         for key in keys:
             parts = key.split("##", 1)
             if len(parts) != 2:
@@ -766,29 +777,42 @@ class GroupBackgroundMixin:
                 continue
             if y_arr.size < 2:
                 continue
-            x_data = lookup_energy(self, abs_path, parent, int(y_arr.size))
+            x_data, has_energy = lookup_energy(self, abs_path, parent, int(y_arr.size), report=True)
             try:
                 x_arr = np.asarray(x_data, dtype=float).ravel()
             except Exception:
                 continue
             if x_arr.size < 2:
                 continue
-            y_proc = processing.apply_normalization(self, abs_path, parent, y_arr)
+            y_proc, normalized = processing.apply_normalization(self, abs_path, parent, y_arr, report=True)
             try:
                 y_proc = np.asarray(y_proc, dtype=float).ravel()
             except Exception:
                 y_proc = np.asarray(y_arr, dtype=float).ravel()
+                normalized = False
             mlen = int(min(x_arr.size, y_proc.size))
             if mlen < 3:
                 continue
             x_use = np.asarray(x_arr[:mlen], dtype=float).ravel()
             y_use = np.asarray(y_proc[:mlen], dtype=float).ravel()
-            bg = self._apply_automatic_bg_new(x_use, y_use, deg=deg, pre_edge_percent=pre, do_plot=False)
+            bg, auto_complete = self._apply_automatic_bg_new(
+                x_use, y_use, deg=deg, pre_edge_percent=pre, do_plot=False, report=True
+            )
             bg = np.asarray(bg, dtype=float).ravel()[:mlen]
             items[key] = (x_use, y_use, bg, hdf5_path)
+            label = (getattr(self, "curve_display_names", None) or {}).get(key) or self.shorten_label(hdf5_path)
+            labels[key] = label
+            if not has_energy:
+                problems[key] = f"{label}: no photon-energy axis is available."
+            elif x_arr.size != y_proc.size:
+                problems[key] = f"{label}: photon-energy and intensity lengths differ."
+            elif not normalized:
+                problems[key] = f"{label}: I0 normalization did not complete."
+            elif not auto_complete:
+                problems[key] = f"{label}: the automatic background fit fell back."
 
         if not items:
-            return
+            return None, "Group BG did not produce any processed spectra."
         # Choose a representative x-grid for the pre-edge marker and dragging.
         # Prefer a common grid if available; otherwise fall back to the first spectrum's grid.
         try:
@@ -817,14 +841,16 @@ class GroupBackgroundMixin:
             m = str(norm_mode).strip().lower()
             equalize_jump = m in ("area", "area=1")
         except Exception:
+            m = ""
             equalize_jump = False
 
+        equalized = set()
+        _match_slope = False
         if equalize_jump and len(items) >= 2:
             # Use a coupled correction so that each spectrum has zero pre-edge baseline after BG subtraction,
             # and the jump after Area-normalization is the same across the selected group.
             try:
                 simple = {k: (v[0], v[1], v[2]) for k, v in items.items()}
-                _match_slope = False
                 try:
                     scb = getattr(self, "chk_group_bg_slope", None)
                     if scb is not None and scb.isEnabled() and scb.isChecked():
@@ -833,7 +859,7 @@ class GroupBackgroundMixin:
                     _match_slope = False
 
                 adjusted, msg = self._group_equalize_area_jump_and_zero_preedge(
-                    simple, pre=float(pre), match_preedge_slope=bool(_match_slope)
+                    simple, pre=float(pre), match_preedge_slope=bool(_match_slope), completed=equalized
                 )
                 for k, (x_u, y_u, bg_u) in adjusted.items():
                     if k in items:
@@ -845,19 +871,31 @@ class GroupBackgroundMixin:
                     except Exception:
                         pass
             except Exception:
-                pass
+                equalized.clear()
 
         # Plot all selected curves
+        processed = {}
+        capture = len(keys) >= 3 and subtract and m == "area"
         for key, (x_use, y_use, bg, hdf5_path) in items.items():
             if x_use.size == 0:
                 continue
             if subtract:
-                yy = y_use - bg
+                signal = y_use - bg
+                yy = signal
                 try:
-                    yy = processing._proc_safe_post_normalize(self, x_use, yy, norm_mode)
+                    yy = processing._proc_safe_post_normalize(self, x_use, signal, norm_mode)
                 except Exception:
                     pass
                 line, = self.proc_ax.plot(x_use, yy, label=self.shorten_label(hdf5_path), color=self._get_persistent_curve_color(key))
+                if capture and key not in problems:
+                    label = labels[key]
+                    if key not in equalized:
+                        problems[key] = f"{label}: the requested Group BG equalization did not complete."
+                    # Area normalization returns the input unchanged when it cannot scale.
+                    elif yy is signal or not np.array_equal(np.isfinite(yy), np.isfinite(signal)):
+                        problems[key] = f"{label}: area normalization did not complete."
+                    else:
+                        processed[key] = (label, x_use, yy)
             else:
                 # Show the original (unsubtracted) spectrum together with its fitted background.
                 # Use the same persistent color key as the spectrum itself.
@@ -872,6 +910,17 @@ class GroupBackgroundMixin:
                 line.dataset_key = key
             except Exception:
                 pass
+
+        if len(keys) < 3:
+            return None, GROUP_REQUIRED
+        if not subtract:
+            return None, "Enable background subtraction to use the Group BG spectra."
+        if not capture:
+            return None, "Use Area post-normalization to analyze the Group BG spectra."
+
+        channel = self.combo_norm.currentText() if self.chk_normalize.isChecked() else None
+        settings = GroupBGSettings(deg, pre, _match_slope, channel)
+        return capture_group(keys, processed, problems, settings)
 
     # (moved to plotting: update_plot_processed)
 

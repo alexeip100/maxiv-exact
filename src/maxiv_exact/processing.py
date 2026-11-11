@@ -8,7 +8,7 @@ from .data import lookup_energy
 # --- / Normalisation helper (module-level wrapper for backward compatibility)
 from .qt_helpers import is_checked_state
 
-def apply_normalization(viewer, abs_path, parent, y_data):
+def apply_normalization(viewer, abs_path, parent, y_data, *, report=False):
     """Apply I0 normalisation for a given spectrum.
 
     Parts of the codebase call a module-level ``processing.apply_normalization``.
@@ -16,15 +16,18 @@ def apply_normalization(viewer, abs_path, parent, y_data):
     ``_apply_normalization`` (defined in plotting.py).
 
     This wrapper delegates to that method if present, otherwise returns the
-    input unchanged.
+    input unchanged. With report=True, also report whether the requested
+    normalization completed (or was disabled).
     """
     try:
         fn = getattr(viewer, "_apply_normalization", None)
         if callable(fn):
+            if report:
+                return fn(abs_path, parent, y_data, report=True)
             return fn(abs_path, parent, y_data)
     except Exception:
         pass
-    return y_data
+    return (y_data, False) if report else y_data
 
 
 import numpy as np

@@ -19,7 +19,7 @@ Think in three layers:
 ### First-time orientation
 If this is your first session, you do not need to understand every control before starting. A normal path is:
 
-1. **Open HDF5** and choose one file.
+1. Choose **File → Open HDF5 file** and select one file.
 2. In **Raw Data**, select one detector family such as TEY, PEY, TFY, or PFY and inspect the spectra.
 3. In **Processed Data**, first decide whether to normalize by **I₀**, then choose background subtraction and post-normalization only if they are needed for the comparison you want to make.
 4. Use **Pass** when you are ready to collect processed curves in **Plotted Data** for comparison, styling, references, or multi-curve export.
@@ -58,7 +58,7 @@ When in doubt, use **How to?** for a workflow explanation and **What is what?** 
 # Global controls
 These buttons control file loading and global reset actions.
 
-## **Open HDF5**
+## **File → Open HDF5 file**
 Opens one or more HDF5 files. Loaded files appear in the **HDF5 Structure** tree.
 
 You can also drag and drop one or more `.h5`/`.hdf5` files directly onto the **HDF5 Structure** tree or onto any of the three main plotting areas (**Raw Data**, **Processed Data**, or **Plotted Data**). All drop targets use the same loader. Invalid files are skipped with a warning.
@@ -122,7 +122,7 @@ This dialog defines how the application recognizes roles such as **TEY / PEY / T
 ---
 
 ## Settings (⚙)
-The cog button next to **Open HDF5** opens the global appearance settings.
+The cog button next to **File** opens the global appearance settings.
 
 - **Theme:** System, Light, or Dark.
 - **UI font size:** Default, +1 pt, or +2 pt. This changes Qt interface text, not Matplotlib plot/figure fonts.
@@ -227,6 +227,14 @@ Right-click the group name to access:
 - **Rename**: changes the group name (and updates the label in **Plotted Data** if that curve is present there).
 - **Delete**: removes the summed group after an OK/Cancel warning. (Curves already passed to **Plotted Data** are not removed automatically.)
 
+
+#### **NEXAFS Fit / Trends…**
+
+Opens a captured group of at least three selected spectra that completed **Group BG**, background subtraction and area normalization. The **Fit** tab shows the model, fitted components and linked residuals. The **Trends** tab compares fitted parameters from the two passes, with a choice of spectrum index or experimental X values. **Experimental parameters…** edits the metadata; **Results…** shows the read-only fit values, status and diagnostics. **Line style** changes only how points are connected on the plot. **Show provisional fits** displays finite, feasible fits that did not converge using cross markers. **Diagnostics…** shows SciPy's stop reason, evaluation or iteration counts, optimality, and any parameters at or near bounds. Ratios are unavailable when the denominator is at or below the larger of 10⁻¹⁵ area units and 10⁻¹⁰ of the largest absolute denominator area for that pass and convergence status.
+
+Use **Analysis files** to load or save configurations and save complete analyses. **File → Open NEXAFS analysis session** in the main window opens those complete analyses independently of the source scans. The two commands in the **Trends → Export** menu export the available pass results or the selected plot data with units and status.
+
+**See also (How to?):** *Fit a NEXAFS series and inspect trends*.
 
 #### **Group BG**
 Enabled when you have two or more curves that you want to process *as a comparable group*.

@@ -1779,7 +1779,7 @@ class DataMixin:
         return None, None
 
 
-def lookup_energy(viewer, abs_path: str, parent: str, length: int):
+def lookup_energy(viewer, abs_path: str, parent: str, length: int, *, report=False):
     """
     Return the energy axis for a given 1D dataset.
 
@@ -1791,13 +1791,17 @@ def lookup_energy(viewer, abs_path: str, parent: str, length: int):
     2) Fallback to original behaviour using "pcap_energy_av" or "mono_traj_energy"
        either under the same parent or at the file root.
     3) If none found, return a simple arange(length).
+
+    With report=True, return (energy, has_photon_energy). The cache marker
+    is True for synthetic energy, False for HDF5 energy, or None for indices.
     """
     cache = getattr(viewer, "energy_cache", None)
     if cache is None:
         cache = viewer.energy_cache = {}
     key = f"{abs_path}::{parent}"
     if key in cache:
-        return cache[key][0]
+        energy, source = cache[key]
+        return (energy, source is not None) if report else energy
 
     x = None
     try:
@@ -1860,10 +1864,13 @@ def lookup_energy(viewer, abs_path: str, parent: str, length: int):
     except Exception:
         x = None
 
-    if x is None:
+    has_photon_energy = x is not None
+    if not has_photon_energy:
         x = np.arange(length)
-    cache[key] = (x, False)
-    return x
+    cache[key] = (x, False if has_photon_energy else None)
+    return (x, has_photon_energy) if report else x
+
+
 def collect_available_1d_datasets(self):
         """Return a sorted list of unique relative paths for all 1D datasets across opened HDF5 files.
         Relative path is with respect to the group (no leading slash)."""

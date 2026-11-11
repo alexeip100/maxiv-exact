@@ -5,7 +5,7 @@ You’ve just opened EXACT and want to get from “a file on disk” to “a cur
 
 Start simple:
 
-1) Click **Open HDF5** and select your file(s). The file(s) appear in the **HDF5 Structure** tree.  
+1) Choose **File → Open HDF5 file** and select your file(s). The file(s) appear in the **HDF5 Structure** tree.
 2) Go to **Raw Data** and make your first broad choice: *which kind of signal do I want to look at?*  
    - If you’re after an electron-yield view, try **All TEY data** or **All PEY data**.  
    - If you’re working with fluorescence, try **All TFY data** or **All PFY data**.  
@@ -33,7 +33,7 @@ Start simple:
 - **MCR-ALS**: Multivariate Curve Resolution – Alternating Least Squares
 
 ## Load an HDF5 file and orient yourself
-1. Click **Open HDF5** or drag an `.h5` / `.hdf5` file onto the **HDF5 Structure** tree or any main plotting area.
+1. Choose **File → Open HDF5 file** or drag an `.h5` / `.hdf5` file onto the **HDF5 Structure** tree or any main plotting area.
 2. Expand the file only as far as you need. The tree is lazy-loaded, so opening a large file does not require expanding every group.
 3. Start in **Raw Data**. For a standard measurement, try one detector-family selector (TEY/PEY/TFY/PFY) before manually checking individual datasets.
 4. If you want to inspect a scalar or text metadata item, click it in the HDF5 tree; its value is shown below the Raw plot when supported.
@@ -41,7 +41,7 @@ Start simple:
 
 You can open several files together and compare curves across them. Use the file-level right-click **Close** action when you want to remove only one file without clearing the whole session.
 
-**Controls used (What is what?):** *Open HDF5*, *HDF5 Structure*, *Raw Data*, *Setup channels*
+**Controls used (What is what?):** *File → Open HDF5 file*, *HDF5 Structure*, *Raw Data*, *Setup channels*
 
 ## Adjust the interface for your screen
 Use the **⚙ Settings** button when you want a different application theme or larger interface text. Theme and UI font size are remembered between sessions. Enlarging the UI font also enlarges the relevant control geometry; Matplotlib plot fonts are unchanged.
@@ -190,6 +190,19 @@ That’s what **Group BG** is for: it puts the app into a consistent group mode 
 4) Click **Pass** to move the group into **Plotted Data** for styling, ordering, annotation, and export.
 
 **Controls used (What is what?):** *Group BG mode*, *Match pre-edge*, *Pass*
+
+---
+
+# Fit a NEXAFS series and inspect trends
+
+1. In **Processed Data**, select at least three spectra with comparable energy ranges. Enable **Group BG** and leave **Subtract BG** on. Open **NEXAFS Fit / Trends…** once the selected spectra have completed Group BG and area normalization.
+2. In **Fit**, choose the group average or an individual spectrum. Use the arrows beside **Spectrum** to step through the list. Set the fit interval and add Gaussian resonances to the IP step. A Gaussian's **area** is its full integrated contribution. An IP **height** is the size of the step, and its FWHM describes the derivative of that step. The Type column selects an error-function or arctangent step.
+3. Use **F** for a fixed shape value, **S** for one value shared across spectra in Pass 2, or **I** for independent values. S and I both vary in a reference fit or Pass 1. Use the **All** row to set a mode for an entire column. Gaussian areas are independent; the height mode applies only to IP steps. Optional position and width bounds are under **Advanced constraints…**.
+4. Use **Fit reference** to check the model and residual on the selected spectrum. **Run Pass 1** fits each spectrum independently. **Run Pass 2** fits the group simultaneously, with equal aggregate weight per spectrum. The editable component table takes its new starting values from a converged reference fit. In **Pass 1** or **Pass 2** it displays the fitted values for the selected spectrum. Editing a fitted value updates that setting in the common starting model and returns to **Model preview**. Earlier results remain available and are marked outdated if the model changes.
+5. In **Trends**, choose a fitted quantity or a Gaussian area ratio, and select Pass 1, Pass 2, or both. Use Ctrl or Shift to select several components for an ordinary trend. Spectrum index is the default X axis. Use **Experimental parameters…** to enter a name, unit and per-spectrum values, then choose **Experimental parameter** for the X axis. Open **Results…** for all fitted values and diagnostics. **Line style** offers Points, Lines (default), and shape-preserving Smooth curves. Lines and Smooth retain the original markers and break at unavailable fits or ambiguous X values. CSV exports keep the original values.
+6. Use **Analysis files** to save a JSON configuration or a complete HDF5 analysis. A configuration restores the model and matches experimental values by source file and dataset identifier. A complete analysis includes the captured spectra and any reference and pass results. Reopen it with **File → Open NEXAFS analysis session** in the main window, even when the source files are unavailable. The Trends tab exports all fitted parameters or the selected plot data to separate CSV files.
+
+Group BG puts the series on a common area scale, so the fitted areas describe **relative intensity redistribution**. The fit uses the captured intensities without additional normalization or a free baseline. Gaussian contributions are empirical and need not correspond to unique electronic transitions. Overlapping resonances, broad Gaussians and IP steps can trade intensity with little change in the total fit. Check the residuals, fit interval and diagnostics before interpreting an area or ratio as a robust trend.
 
 ---
 
