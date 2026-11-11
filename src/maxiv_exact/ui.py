@@ -594,7 +594,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
             md_filename="usage_controls.md", window_title="Usage — Controls"))
         self.howto_action.triggered.connect(lambda: self.show_usage_info(
             md_filename="usage_workflows.md", window_title="Usage — Workflows"))
-        self.whats_new_action.triggered.connect(lambda: self.show_whats_new_info(max_versions=5))
+        self.whats_new_action.triggered.connect(lambda: self.show_whats_new_info())
         self.about_action.triggered.connect(self.show_about_info)
 
         self.left_panel.addLayout(self.open_close_layout)

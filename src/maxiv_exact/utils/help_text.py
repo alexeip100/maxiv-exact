@@ -483,7 +483,8 @@ def _parse_changelog_sections(md: str):
     blocks = []
     for i, (tag, d, start) in enumerate(starts):
         end = starts[i+1][2] if i+1 < len(starts) else len(rest)
-        blocks.append((tag, d, rest[start:end].strip()))
+        block = re.split(r"\n## ", rest[start:end], maxsplit=1)[0].strip()
+        blocks.append((tag, d, block))
 
     unreleased = None
     versions = []
@@ -504,16 +505,20 @@ def _semver_key(v: str):
     s = (v or "").strip()
     if s.lower().startswith("v"):
         s = s[1:]
-    m = re.match(r"^(\d+)\.(\d+)(?:\.(\d+))?", s)
+    m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:\.post(\d+))?", s)
     if not m:
         return None
     major = int(m.group(1))
     minor = int(m.group(2))
-    patch = int(m.group(3) or 0)
-    return (major, minor, patch)
+    patch = int(m.group(3))
+    post = int(m.group(4)) if m.group(4) is not None else -1
+    return (major, minor, patch, post)
 
 
-def build_whats_new_markdown(current_version: str, max_versions: int = 5) -> tuple[str, str]:
+WHATS_NEW_RELEASE_LIMIT = 10
+
+
+def build_whats_new_markdown(current_version: str, max_versions: int = WHATS_NEW_RELEASE_LIMIT) -> tuple[str, str]:
     """Build a markdown document for 'What's new' from docs/CHANGELOG.md.
 
     Returns:
@@ -527,29 +532,11 @@ def build_whats_new_markdown(current_version: str, max_versions: int = 5) -> tup
     if not versions:
         return ("# What's new\n\n**No released versions found in changelog.**\n", "")
 
-    # Sort by semver desc when possible, otherwise keep file order
-    versions_sorted = []
-    versions_unparsable = []
-    for tag, d, block in versions:
-        key = _semver_key(tag)
-        if key is None:
-            versions_unparsable.append((tag, d, block))
-        else:
-            versions_sorted.append((key, tag, d, block))
-
-    versions_sorted.sort(key=lambda x: x[0], reverse=True)
-    merged = [(tag, d, block) for _, tag, d, block in versions_sorted] + versions_unparsable
-
-    # User-facing What's new should describe public releases, not the internal
-    # alpha/RC sequence used to prepare them.  When the installed version is a
-    # stable release, hide pre-release changelog entries (a/b/rc tags) while
-    # retaining them in the full packaged changelog.
-    current_is_stable = re.fullmatch(r"v?\d+\.\d+\.\d+(?:\.post\d+)?", str(current_version).strip()) is not None
-    if current_is_stable:
-        prerelease_tag = re.compile(r"^v?\d+\.\d+\.\d+(?:a|b|rc)\d+", re.I)
-        merged = [item for item in merged if not prerelease_tag.match(item[0])]
-
-    top = merged[:max_versions]
+    # Only final and post releases count toward the history limit.
+    releases = [(key, tag, date, block) for tag, date, block in versions
+                if (key := _semver_key(tag)) is not None]
+    releases.sort(key=lambda release: release[0], reverse=True)
+    top = [(tag, date, block) for _, tag, date, block in releases[:max_versions]]
 
     latest_version = top[0][0] if top else ""
 
@@ -596,7 +583,7 @@ def build_whats_new_markdown(current_version: str, max_versions: int = 5) -> tup
     return ("\n".join(out).strip() + "\n", latest_version)
 
 
-def get_whats_new_payload(current_version: str, max_versions: int = 5) -> tuple[str, str]:
+def get_whats_new_payload(current_version: str, max_versions: int = WHATS_NEW_RELEASE_LIMIT) -> tuple[str, str]:
     """Return (html, latest_version) for the What's new window."""
     md, latest = build_whats_new_markdown(current_version=current_version, max_versions=max_versions)
     try:

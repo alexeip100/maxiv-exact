@@ -27,7 +27,7 @@ from PyQt6.QtGui import QTextDocument, QKeySequence, QFont, QShortcut
 
 from ..widgets.help_browser import HelpBrowser
 from ..widgets.mathjax_help_browser import MathJaxHelpBrowser
-from ..utils.help_text import get_usage_html, get_whats_new_payload, build_whats_new_markdown
+from ..utils.help_text import WHATS_NEW_RELEASE_LIMIT, get_usage_html, get_whats_new_payload, build_whats_new_markdown
 
 
 class CorePlottingMixin:
@@ -568,7 +568,7 @@ class CorePlottingMixin:
 
 
 
-    def show_whats_new_info(self, max_versions: int = 5):
+    def show_whats_new_info(self, max_versions: int = WHATS_NEW_RELEASE_LIMIT):
         """Show a 'What's new' dialog built from docs/CHANGELOG.md.
 
         The TOC lists the latest versions (H3 headings). If the newest changelog
