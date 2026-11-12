@@ -169,11 +169,14 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         windows = self._nexafs_fit_windows
         window = next((item for item in windows if item.group is group), None)
         if window is None:
-            window = NexafsFitDialog(group, parent=self, analysis=analysis)
+            window = NexafsFitDialog(group, analysis=analysis)
             window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
             windows.append(window)
             window.destroyed.connect(lambda *_: windows.remove(window))
-        window.show()
+        if window.isMinimized():
+            window.showNormal()
+        else:
+            window.show()
         window.raise_()
         window.activateWindow()
 

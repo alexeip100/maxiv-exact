@@ -11,9 +11,8 @@ def test_fluorescence_map_default_and_reset_are_terrain():
     assert "self._colormap='viridis'" not in source
 
 def test_release_metadata_and_whats_new():
-    assert __version__ == "2.6.1"
     markdown, latest = build_whats_new_markdown(current_version=__version__)
     assert latest == __version__
-    current = markdown.split("### 2.6.1 — 2026-10-30", 1)[1].split("---", 1)[0]
-    assert "#### Changed" in current and "#### Fixed" in current
-    assert "terrain" in current and "Processed Data" in current and "Pass" in current
+    historical = markdown.split("### 2.6.1 — 2026-10-30", 1)[1].split("---", 1)[0]
+    assert "#### Changed" in historical and "#### Fixed" in historical
+    assert "terrain" in historical and "Processed Data" in historical and "Pass" in historical

@@ -1,3 +1,13 @@
+## [2.7.0] – 2026-11-12
+
+### Added
+- **NEXAFS Fit / Trends** fits Group BG-processed spectra with Gaussian resonances and ionization-potential steps. Edit components in the table or on the plot, check residuals, and run reference, independent, or global fits.
+- Compare fitted parameters and Gaussian area ratios by spectrum or experimental variable, with convergence diagnostics and clear status for provisional and outdated fits.
+- Save reusable fitting configurations or complete analysis sessions. Export trends as CSV or share a ZIP with the selected pass's curves, residuals, and parameter metadata for each spectrum.
+
+### Changed
+- The main **File** menu opens HDF5 data and saved NEXAFS analysis sessions. Bundled Help covers the new controls and workflow.
+
 ## [2.6.1] – 2026-10-30
 
 ### Changed

@@ -228,14 +228,6 @@ Right-click the group name to access:
 - **Delete**: removes the summed group after an OK/Cancel warning. (Curves already passed to **Plotted Data** are not removed automatically.)
 
 
-#### **NEXAFS Fit / Trends…**
-
-Opens a captured group of at least three selected spectra that completed **Group BG**, background subtraction and area normalization. The **Fit** tab shows the model, fitted components and linked residuals. The **Trends** tab compares fitted parameters from the two passes, with a choice of spectrum index or experimental X values. **Experimental parameters…** edits the metadata; **Results…** shows the read-only fit values, status and diagnostics. **Line style** changes only how points are connected on the plot. **Show provisional fits** displays finite, feasible fits that did not converge using cross markers. **Diagnostics…** shows SciPy's stop reason, evaluation or iteration counts, optimality, and any parameters at or near bounds. Ratios are unavailable when the denominator is at or below the larger of 10⁻¹⁵ area units and 10⁻¹⁰ of the largest absolute denominator area for that pass and convergence status.
-
-Use **Analysis files** to load or save configurations and save complete analyses. **File → Open NEXAFS analysis session** in the main window opens those complete analyses independently of the source scans. The two commands in the **Trends → Export** menu export the available pass results or the selected plot data with units and status.
-
-**See also (How to?):** *Fit a NEXAFS series and inspect trends*.
-
 #### **Group BG**
 Enabled when you have two or more curves that you want to process *as a comparable group*.
 
@@ -276,6 +268,34 @@ Sometimes Auto polynomial backgrounds are “good enough” curve-by-curve, but 
 Match pre-edge can improve consistency, but it does so by allowing a more flexible adjustment of the background specifically to make the pre-edge align. Sanity-check that you are not introducing artificial structures or distorting real low-energy features. A good practice is to toggle it on/off and confirm that the edge-region features you care about remain stable.
 
 **See also (How to):** *Compare multiple curves consistently (Group BG)*
+
+#### **NEXAFS Fit / Trends…**
+
+Opens a standalone analysis window for the current **Processed Data** selection. The button requires at least three spectra that completed **Group BG** with background subtraction and area normalization over comparable energy ranges. If the button is disabled, its tooltip gives the reason. The window works with the captured spectra and processing settings. To analyze a different selection or processing setup, open a new analysis from **Processed Data**.
+
+##### Fit tab
+
+- **Spectrum** selects an individual scan or the **Group average**. The arrows step through the list. **Display** switches between **Model preview**, **Reference**, **Pass 1**, and **Pass 2** as results become available.
+- **Components** shows or hides individual curves in the plot. The table swatches match the curve colors. The lower plot shows the residual (processed data minus total fit) and rescales vertically to the visible energy range.
+- **Name** and **Pos. (eV)** sort the table by component number and by the displayed energy, respectively. Click again to reverse the order. The **All** row stays at the top.
+- **Add Gaussian**, **Add IP**, and **Remove selected** change the component list. The model requires at least one IP step. **Type** selects the error-function or arctangent shape for each IP step. Edit positions, FWHMs, and areas or heights in the table. You can also drag a colored handle at a Gaussian peak or IP-step midpoint horizontally for energy or vertically for area or height. Release on the plot to apply the edit. If handles overlap, select the desired row first.
+- **Mode** sets a parameter to **F** (fixed at its model value), **S** (one value shared across the group in Pass 2), or **I** (independent). Shared and independent parameters both vary in the reference fit and Pass 1. Gaussian areas are always independent. IP heights can be shared or independent. The **All** row sets a mode for the applicable entries in a column. **Advanced constraints…** sets optional position and FWHM bounds.
+- **Fit interval (eV)** sets the energy limits for fitting. **Fit reference** fits the selected spectrum or group average. **Run Pass 1** fits each spectrum independently. **Run Pass 2** fits the group simultaneously. **Cancel fit** stops a running fit and preserves earlier results.
+- **Diagnostics…** reports convergence, residual RMS, solver stop details, parameters at or near bounds, and warnings about poor conditioning when available. A fit can converge at a bound. A finite, feasible result that stopped before convergence is provisional. Model or constraint edits mark affected earlier fits as outdated.
+
+##### Trends tab
+
+- **Plot** selects a Gaussian area, center, or FWHM, an IP height, position, or derivative FWHM, or a Gaussian area ratio. Use Ctrl or Shift to select multiple components. For a ratio, select two distinct Gaussians under **Numerator** and **Denominator**. Ratios are undefined when the denominator area is at or below the larger of 10⁻¹⁵ area units and 10⁻¹⁰ of the largest absolute denominator area for that pass and convergence status.
+- **Results** selects either pass or both for plotting. **Results…** opens the read-only fit values and diagnostics. **X axis** switches between **Spectrum index** and values entered in **Experimental parameters…**. A spectrum without an experimental value is omitted from the experimental-axis plot.
+- **Line style** offers **Points**, **Lines**, and **Smooth**. Lines and Smooth retain the original fitted points and break at unavailable results or ambiguous X values. The style affects only the plot. **Show provisional fits** includes usable, nonconverged values as crosses. Failed fits are excluded from the plot.
+
+##### Save and export
+
+- **Analysis files** loads or saves a JSON configuration and saves a complete HDF5 analysis. Use **File → Open NEXAFS analysis session** in the main window to reopen a complete analysis independently of the source scans.
+- **Export Pass 1…** or **Export Pass 2…** on the **Fit** tab saves one ZIP for the whole group and identifies the selected pass before saving. It includes all components, even if they are hidden on the plot. Outdated or provisional fit values require confirmation.
+- In **Trends → Export**, **Export fitted parameters…** writes the available pass results and **Export selected trends…** writes the selected trend data. These CSV files include status and units.
+
+**See also (How to?)** *Fit a NEXAFS series and inspect trends*.
 
 #### **FY Analysis**
 

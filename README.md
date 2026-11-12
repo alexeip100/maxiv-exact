@@ -17,6 +17,7 @@ Starting with the **2.5 series**, the same software continues under the **EXACT*
 - Use built-in or user-edited **channel profiles** to map HDF5 dataset names to the physical detector roles.
 - Browse raw curves, load detector groups, and send selected spectra to the processing workflow.
 - Apply common XAS/NEXAFS pre-processing steps such as normalization, background handling, averaging/summation, and grouped background alignment.
+- Fit Group BG-processed NEXAFS series with Gaussian resonances and IP steps, compare fitted trends, and save or export the results.
 - Compare spectra visually in overlay or waterfall-style presentations.
 - Explore bundled **X-ray reference data** from Henke/CXRO and Chantler/XrayDB, including atomic scattering factors and mass attenuation coefficients.
 - Enter one or several **chemical formulas** to calculate and compare Chantler-based compound mass attenuation coefficients.
@@ -34,7 +35,7 @@ EXACT currently focuses on **HDF5** files used for X-ray absorption spectroscopy
 
 ## Installation
 
-A dedicated **conda environment** is recommended. EXACT 2.6.1 targets **Python 3.14** and **PyQt6**.
+A dedicated **conda environment** is recommended. EXACT 2.7.0 targets **Python 3.14** and **PyQt6**.
 
 Create the environment once. The command below installs the important Qt/scientific dependencies explicitly, including **h5py** (required for HDF5 files):
 
@@ -57,11 +58,11 @@ Then choose **one** installation method.
 1. Open the EXACT repository on GitHub.
 2. Open **Releases** and choose the **Latest** release.
 3. Scroll to the **bottom of the release page** and expand **Assets** if necessary.
-4. Download the file ending in **`.whl`** (for example `maxiv_exact-2.6.1-py3-none-any.whl`).
+4. Download the file ending in **`.whl`** (for example `maxiv_exact-2.7.0-py3-none-any.whl`).
 5. Open a terminal in the folder containing the downloaded wheel and install it:
 
 ```bash
-pip install --no-deps maxiv_exact-2.6.1-py3-none-any.whl
+pip install --no-deps maxiv_exact-2.7.0-py3-none-any.whl
 ```
 
 ### From the source folder

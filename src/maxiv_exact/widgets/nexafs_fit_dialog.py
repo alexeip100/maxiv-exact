@@ -5,6 +5,7 @@ from threading import Event
 
 import numpy as np
 from PyQt6.QtCore import QObject, QSignalBlocker, QThread, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QColor, QIcon, QPixmap
 from PyQt6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDoubleSpinBox, QFileDialog, QGridLayout, QHBoxLayout,
     QHeaderView, QLabel, QMenu, QMessageBox, QProgressBar, QPushButton, QSplitter,
@@ -12,7 +13,9 @@ from PyQt6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 from matplotlib import colormaps
+from matplotlib.colors import to_hex
 
+from ..nexafs_fit.fit_export import export_fit_pass
 from ..nexafs_fit.group import mean_spectrum
 from ..nexafs_fit.model import (
     FitComponent, FitModel, Gaussian, IPStep, ParameterMode, StepForm, evaluate_model, gaussian_basis,
@@ -77,8 +80,8 @@ class _FitWorker(QObject):
 
 
 class NexafsFitDialog(QDialog):
-    def __init__(self, group, parent=None, *, analysis=None):
-        super().__init__(parent)
+    def __init__(self, group, *, analysis=None):
+        super().__init__(None, Qt.WindowType.Window)
         self.group = group
         self.setWindowTitle("NEXAFS Fit / Trends")
         self.setWindowFlag(Qt.WindowType.WindowMinMaxButtonsHint, True)
@@ -146,7 +149,10 @@ class NexafsFitDialog(QDialog):
         fit_layout = QVBoxLayout(fit)
 
         selectors = QHBoxLayout()
-        fit_layout.addLayout(selectors)
+        plot_side = QWidget()
+        plot_layout = QVBoxLayout(plot_side)
+        plot_layout.setContentsMargins(0, 0, 0, 0)
+        plot_layout.addLayout(selectors)
         self.spectrum = QComboBox()
         self.spectrum.addItem("Group average", None)
         for key, spec in self._spectra.items():
@@ -163,25 +169,32 @@ class NexafsFitDialog(QDialog):
         self.next_spectrum = self._spectrum_arrow(Qt.ArrowType.RightArrow, "Next spectrum", 1)
         selectors.addWidget(self.previous_spectrum)
         selectors.addWidget(self.next_spectrum)
-        selectors.addWidget(QLabel("Display"))
-        selectors.addWidget(self.view)
+        display_controls = QHBoxLayout()
+        display_controls.addStretch(1)
+        display_controls.addWidget(QLabel("Display"))
+        display_controls.addWidget(self.view)
         self.components_button = QToolButton()
         self.components_button.setText("Components")
         self.components_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.components_menu = QMenu(self.components_button)
         self.components_menu.aboutToShow.connect(self._build_components_menu)
         self.components_button.setMenu(self.components_menu)
-        selectors.addWidget(self.components_button)
+        display_controls.addWidget(self.components_button)
+        self.export_button = QPushButton("Export fits…")
+        self.export_button.clicked.connect(self._export_displayed_pass)
+        display_controls.addWidget(self.export_button)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)
         fit_layout.addWidget(splitter, 1)
         self.plot = NexafsFitPlot()
-        splitter.addWidget(self.plot)
+        plot_layout.addWidget(self.plot, 1)
+        splitter.addWidget(plot_side)
 
         side = QWidget()
         side_layout = QVBoxLayout(side)
         side_layout.setContentsMargins(2, 0, 0, 0)
+        side_layout.addLayout(display_controls)
         splitter.addWidget(side)
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 2)
@@ -195,6 +208,9 @@ class NexafsFitDialog(QDialog):
         self.model_note.setWordWrap(True)
         model_layout.addWidget(self.model_note)
         self.model_table = self._make_table()
+        self._component_sort_column = 0
+        self._component_sort_order = Qt.SortOrder.AscendingOrder
+        self.model_table.horizontalHeader().sectionClicked.connect(self._sort_by_header)
         model_layout.addWidget(self.model_table, 1)
         delegate = FitNumberDelegate(self.model_table)
         delegate.number_edited.connect(self._edit_component)
@@ -259,6 +275,8 @@ class NexafsFitDialog(QDialog):
         self.spectrum.currentIndexChanged.connect(self._show_selection)
         self.view.currentIndexChanged.connect(self._show_selection)
         self.model_table.cellChanged.connect(self._edit_component)
+        self.model_table.currentCellChanged.connect(self._select_plot_component)
+        self.plot.component_edited.connect(self._drag_component)
         self.add_gaussian.clicked.connect(self._add_gaussian)
         self.add_ip.clicked.connect(self._add_ip)
         self.remove_component.clicked.connect(self._remove_component)
@@ -289,10 +307,14 @@ class NexafsFitDialog(QDialog):
         table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         header = table.horizontalHeader()
+        header.setSectionsClickable(True)
+        header.setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+        header.setSortIndicatorShown(True)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in range(1, len(_MODEL_COLUMNS)):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
-        table.horizontalHeaderItem(2).setToolTip("Gaussian center or IP-step position in eV")
+        table.horizontalHeaderItem(0).setToolTip("Click to sort by component number.")
+        table.horizontalHeaderItem(2).setToolTip("Click to sort by the displayed Gaussian center or IP position in eV.")
         for column, (_, label) in _MODE_COLUMNS.items():
             table.horizontalHeaderItem(column).setToolTip(f"{label} mode. {_MODE_HELP}")
         return table
@@ -327,6 +349,9 @@ class NexafsFitDialog(QDialog):
                 kind = "Gaussian" if gaussian else f"IP ({component.form})"
                 name = QTableWidgetItem(self.names[spec.key])
                 name.setToolTip(self.names[spec.key])
+                marker = QPixmap(10, 10)
+                marker.fill(QColor(to_hex(self._colors[spec.key])))
+                name.setIcon(QIcon(marker))
                 table.setItem(row, 0, name)
                 kind_item = QTableWidgetItem(kind)
                 kind_item.setFlags(kind_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -357,6 +382,37 @@ class NexafsFitDialog(QDialog):
                     table.setCellWidget(row, 1, combo)
         table.selectRow(min(selected, len(specs)))
 
+    def _sort_by_header(self, column):
+        if column in (0, 2):
+            descending = column == self._component_sort_column and self._component_sort_order == Qt.SortOrder.AscendingOrder
+            self._component_sort_column = column
+            self._component_sort_order = Qt.SortOrder.DescendingOrder if descending else Qt.SortOrder.AscendingOrder
+            self._sort_component_rows()
+        self.model_table.horizontalHeader().setSortIndicator(self._component_sort_column, self._component_sort_order)
+
+    def _sort_component_rows(self):
+        table = self.model_table
+        header = table.verticalHeader()
+        rows = range(1, table.rowCount())
+        reverse = self._component_sort_order == Qt.SortOrder.DescendingOrder
+        if self._component_sort_column == 2:
+            ordered = sorted(rows, key=lambda row: table.item(row, 2).data(Qt.ItemDataRole.UserRole), reverse=reverse)
+        else:
+            def number_order(row):
+                spec = self.model.components[row - 1]
+                kind = "Gaussian" if isinstance(spec.initial, Gaussian) else "IP"
+                prefix, _, serial = spec.key.rpartition(" ")
+                number = int(serial) if prefix == kind and serial.isdecimal() else float("inf")
+                return isinstance(spec.initial, Gaussian), number
+
+            ordered = sorted(rows, key=number_order, reverse=reverse)
+
+        # The logical row still identifies the same component for edits and selections.
+        for visual_row, logical_row in enumerate(ordered, 1):
+            previous = header.visualIndex(logical_row)
+            if previous != visual_row:
+                header.moveSection(previous, visual_row)
+
     def _show_table_values(self, fitted):
         # Keep the editable widgets bound to the model. Only the displayed
         # numbers follow the selected spectrum and result.
@@ -376,6 +432,7 @@ class NexafsFitDialog(QDialog):
                     source = "Fitted value" if has_fit else "Starting value"
                     detail = " · FWHM of the IP-step derivative" if index == 1 and isinstance(spec.initial, IPStep) else ""
                     item.setToolTip(source + detail)
+        self._sort_component_rows()
 
     @staticmethod
     def _table_choice(choices, current, label, help_text):
@@ -475,6 +532,25 @@ class NexafsFitDialog(QDialog):
             self._replace_component(row, spec)
             self._fit_error = ""
             self._show_model_edit()
+
+    def _select_plot_component(self, row, *_):
+        self.plot.selected_key = self.model.components[row - 1].key if 1 <= row <= len(self.model.components) else None
+
+    def _drag_component(self, key, position, amplitude):
+        if self._thread is not None:
+            return
+        for row, spec in enumerate(self.model.components):
+            if spec.key == key:
+                gaussian = isinstance(spec.initial, Gaussian)
+                fields = {}
+                if position is not None:
+                    fields["center" if gaussian else "position"] = position
+                if amplitude is not None:
+                    fields["area" if gaussian else "height"] = amplitude
+                updated = replace(spec, initial=replace(spec.initial, **fields))
+                self._apply_table_setting(row, updated)
+                self.model_table.selectRow(row + 1)
+                return
 
     def _show_model_edit(self):
         with QSignalBlocker(self.view):
@@ -598,6 +674,49 @@ class NexafsFitDialog(QDialog):
                 save_analysis(path, SavedAnalysis(self.group, config, dict(self.results)))
             else:
                 save_configuration(path if path.lower().endswith(".json") else path + ".json", config, self.group)
+        except (ValueError, OSError) as error:
+            QMessageBox.warning(self, title, str(error))
+
+    def _export_displayed_pass(self):
+        stage = self.view.currentData()
+        result = self.results.get(stage)
+        if stage not in ("pass1", "pass2") or result is None or self._thread is not None:
+            return
+        label = _STAGES[stage]
+        title = f"Export {label} fits"
+        outdated = self._outdated(result)
+        buttons = QMessageBox.StandardButton
+        if outdated and QMessageBox.question(
+            self, title, f"{label} is outdated. Export it with that status?",
+            buttons.Yes | buttons.No, buttons.No,
+        ) != buttons.Yes:
+            return
+
+        include_provisional = False
+        provisional_count = sum(row.usable and not row.diagnostics.converged for row in result.spectra)
+        if provisional_count:
+            answer = QMessageBox.question(
+                self, title,
+                f"{label} has {provisional_count} provisional fit(s). Include their fitted values? "
+                "Choose No to export their processed data and status only.",
+                buttons.Yes | buttons.No | buttons.Cancel, buttons.No,
+            )
+            if answer == buttons.Cancel:
+                return
+            include_provisional = answer == buttons.Yes
+
+        dialog = QFileDialog(self, title)
+        dialog.setAcceptMode(QFileDialog.AcceptMode.AcceptSave)
+        dialog.setNameFilter("NEXAFS fit archive (*.zip)")
+        dialog.setDefaultSuffix("zip")
+        dialog.selectFile(f"nexafs-{stage}-fits.zip")
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            export_fit_pass(
+                dialog.selectedFiles()[0], self.group, result, self.names, self.trends.current_experiment(),
+                outdated=outdated, include_outdated=outdated, include_provisional=include_provisional,
+            )
         except (ValueError, OSError) as error:
             QMessageBox.warning(self, title, str(error))
 
@@ -733,6 +852,13 @@ class NexafsFitDialog(QDialog):
         self.trends.set_selected_spectrum(key)
         stage = self.view.currentData()
         result = self.results.get(stage)
+        is_pass = stage in ("pass1", "pass2") and result is not None
+        self.export_button.setText(f"Export {_STAGES[stage]}…" if is_pass else "Export fits…")
+        self.export_button.setEnabled(is_pass and self._thread is None)
+        self.export_button.setToolTip(
+            f"Export {_STAGES[stage]} fits for all spectra as a CSV and JSON ZIP archive."
+            if is_pass else "Display completed Pass 1 or Pass 2 results to export fits."
+        )
         energy, intensity = self._selection_data()
         limits = self._fit_limits() if result is None else result.fit_range
         fit_energy = prediction = residual = None
@@ -794,6 +920,14 @@ class NexafsFitDialog(QDialog):
         self._show_table_values(fitted)
         if result is not None:
             values_note += " · Edits update the common starting model."
+        editable_components = {}
+        if self._thread is None:
+            current = {spec.key: spec for spec in self.model.components}
+            displayed = preview if result is None else components
+            for spec, component in zip(specs, displayed):
+                target = current.get(spec.key)
+                if target is not None and type(target.initial) is type(component):
+                    editable_components[spec.key] = component, target.position_bounds
         self.model_note.setText(values_note)
         self._details = "\n".join(dict.fromkeys(details))
         self.details_button.setEnabled(bool(self._details))
@@ -803,11 +937,12 @@ class NexafsFitDialog(QDialog):
         self.plot.display(
             (key, stage, result), (energy, intensity), fit_energy, prediction, residual,
             curves, limits, spectrum_title=self.spectrum.currentText(), preview=result is None,
+            editable_components=editable_components,
         )
 
     def _component_curves(self, specs, component_sets, energy):
         return tuple(
-            (self.names[spec.key], self._colors[spec.key],
+            (spec.key, self.names[spec.key], self._colors[spec.key],
              "-." if isinstance(spec.initial, IPStep) else "--",
              np.mean([component.evaluate(energy) for component in values], axis=0))
             for spec, values in zip(specs, zip(*component_sets))
