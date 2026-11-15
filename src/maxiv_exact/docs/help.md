@@ -101,7 +101,7 @@ The right panel contains three main tabs: **Raw Data**, **Processed Data**, and 
 **Common tasks:**
 - Normalize spectra by **I₀** before comparing scans.
 - Subtract a background and apply a consistent post-normalization for comparison.
-- Sum repeated scans into one curve ("Sum up").
+- Sum repeated scans, apply manual photon-energy corrections, or subtract a reference via **Spectra**.
 - Use **Group BG** when processing multiple spectra that must be treated consistently.
 
 
@@ -116,7 +116,7 @@ The right panel contains three main tabs: **Raw Data**, **Processed Data**, and 
   Choose which dataset within the entry should be used as I₀. Only used
   when **Normalize by I₀?** is checked.
 
-- **Sum up?** *(button)*  
+- **Spectra → Sum spectra…**
   Opens the **Curve summation** dialog, where you can combine spectra into one or more *summed curves*.
 
   **Workflow:** drag curves into groups, rename groups if desired, then press **OK**.
@@ -129,6 +129,13 @@ The right panel contains three main tabs: **Raw Data**, **Processed Data**, and 
 
   **Energy alignment:** If curves have slightly different energy grids, the app aligns them automatically using common overlap and interpolation.
 
+- **Spectra → Calibrate E…** shifts each visible spectrum horizontally by the entered eV value. Use the arrows for 0.05 eV steps, or type a finer value and press Enter to preview it. **Apply** keeps the corrections, **Cancel** restores the previous values, and zero restores the original axis. Turn off **Group BG** to calibrate, then turn it back on to process the corrected spectra.
+
+- **Spectra → Subtract spectra…** previews the visible sample minus a scaled visible reference. **Single** uses one sample. **Series** uses every other eligible visible spectrum with the same reference and multiplier. The reference is interpolated onto each sample’s corrected energy grid within the overlap. Negative intensities are retained. **Create** saves the differences as snapshots in the curve list. Right-click a difference for its origin and processing information, rename, or delete.
+
+  For subtraction of I₀-normalized signals, enable **Normalize by I₀?** with **Group BG** off. To compare Group BG-processed signals, enable **Group BG** and leave **Subtract BG** on. Subtraction uses the visible curves at the time you create the result.
+
+  Calibrations and differences are available in memory. Export corrected spectra and differences as CSV before restarting EXACT if you want to keep the data.
 
 - **Group BG:** *(checkbox)*
   Becomes **checkable** as soon as **two or more** spectra are selected (it is **not** enabled by default — the user must

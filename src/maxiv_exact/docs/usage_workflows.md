@@ -153,14 +153,14 @@ This workflow is for the common situation: you’re not trying to compare 50 cur
 
 ---
 
-## Sum curves (“Sum up?” dialog)
+## Sum curves
 Summation is what you reach for when you have repeats: several scans that are “the same measurement”, just noisy or slightly shifted, and you want one cleaner curve.
 
-When you click **Sum up?**, you’re essentially telling the app: *“Treat these curves as one group and give me a single representative curve.”*
+Use **Spectra → Sum spectra…** to combine repeated scans into a representative curve.
 
 **How it works in practice:**
 1) In **Processed Data**, make sure the curves you want are visible.  
-2) Click **Sum up?** and build one or more groups (each group becomes one summed curve).  
+2) Choose **Spectra → Sum spectra…** and build one or more groups (each group becomes one summed curve).
 3) Name each group—those names become the new curve names.  
 4) Confirm.
 
@@ -168,7 +168,14 @@ Behind the scenes, the app uses the overlapping energy range, interpolates onto 
 
 If you don’t get a summed curve, it usually means the curves don’t overlap in energy enough to build a shared grid.
 
-**Controls used (What is what?):** *Sum up?*, *Normalize by I₀?*, *Export*
+**Controls used (What is what?):** *Spectra*, *Normalize by I₀?*, *Export*
+
+## Calibrate photon energy and subtract a reference
+
+1. In **Processed Data**, check the spectra you want to use. With **Group BG** off, choose **Spectra → Calibrate E…**. Enter the correction for each spectrum and check the preview. Choose **Apply** to keep the corrections.
+2. For a sample and substrate comparison, choose the monitor channel and enable **Normalize by I₀?**. For a Group BG series, enable **Group BG** and leave **Subtract BG** on. Check the plotted curves before subtracting.
+3. Choose **Spectra → Subtract spectra…**. Select **Single** for one sample or **Series** for all other visible spectra. Choose the reference, adjust its multiplier if needed, and check the dashed previews. Choose **Create** to add the differences.
+4. Use **Origin / processing information…** on a difference to inspect the inputs and settings. The saved curve is a snapshot of those inputs. Select it alone and use **Export** to save a CSV before restarting EXACT.
 
 After summation, you can manage the new group directly in the **Processed Data** tree: right-click the group name for **Group info**, **Rename**, or **Delete**.
 
@@ -197,7 +204,7 @@ That’s what **Group BG** is for: it puts the app into a consistent group mode 
 
 ## Prepare the spectral group
 
-1. In **Processed Data**, select at least three spectra with comparable energy ranges. Leave **Sum up?** off, enable **Group BG**, and leave **Subtract BG** on. Group BG applies area normalization. Check that the processed curves are suitable for comparison.
+1. In **Processed Data**, select at least three spectra with comparable energy ranges. Enable **Group BG** and leave **Subtract BG** on. Group BG applies area normalization. Check that the processed curves are suitable for comparison.
 2. Open **NEXAFS Fit / Trends…** when the button becomes available. If it stays disabled, use its tooltip to identify the processing or selection issue.
 
 ## Set up the model and fit the group
@@ -400,7 +407,7 @@ If a processing choice creates a feature you did not see in the raw data, compar
 2. In **Raw Data**, choose the detector family you actually measured and inspect all scans for outliers.
 3. Confirm that the active channel profile identifies the expected Energy and I₀ signals.
 4. Move to **Processed Data** and enable only the corrections you understand and need. Start with I₀ normalization if appropriate, then background handling, then post-normalization.
-5. For repeated scans of the same sample, inspect them first and then use **Sum up?** if combining them is scientifically justified.
+5. For repeated scans of the same sample, inspect them first and then use **Spectra → Sum spectra…** if combining them is scientifically justified.
 6. For a series that should be compared consistently, consider **Group BG** rather than tuning every spectrum independently.
 7. Use **Pass** to collect final processed curves in **Plotted Data**. Choose meaningful names before exporting.
 8. Add reference spectra only when they help answer a specific comparison question.

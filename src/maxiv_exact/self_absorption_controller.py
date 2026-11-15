@@ -81,7 +81,7 @@ class SelfAbsorptionMixin:
         abs_path, hdf5_path = parts
         y_raw = np.asarray((getattr(self, "plot_data", {}) or {}).get(key), dtype=float).ravel()
         parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
-        x = np.asarray(lookup_energy(self, abs_path, parent, len(y_raw)), dtype=float).ravel()
+        x = np.asarray(lookup_energy(self, abs_path, parent, len(y_raw), dataset_key=key), dtype=float).ravel()
         y = np.asarray(apply_normalization(self, abs_path, parent, y_raw), dtype=float).ravel()
         n = min(x.size, y.size)
         if n < 3:

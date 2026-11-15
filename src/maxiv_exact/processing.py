@@ -19,6 +19,8 @@ def apply_normalization(viewer, abs_path, parent, y_data, *, report=False):
     input unchanged. With report=True, also report whether the requested
     normalization completed (or was disabled).
     """
+    if parent.startswith("__DIFF__/"):
+        return (y_data, False) if report else y_data
     try:
         fn = getattr(viewer, "_apply_normalization", None)
         if callable(fn):
@@ -35,6 +37,34 @@ from .compat import trapezoid
 import matplotlib.pyplot as plt
 plt.ioff()
 import re
+
+
+def subtract_spectra(sample, reference, multiplier):
+    """Subtract a linearly interpolated reference within the sample/reference overlap."""
+    sx, sy = (np.asarray(values, dtype=float) for values in sample)
+    rx, ry = (np.asarray(values, dtype=float) for values in reference)
+    if not np.isfinite(multiplier):
+        raise ValueError("Enter a finite reference multiplier.")
+    for x, y in ((sx, sy), (rx, ry)):
+        if x.ndim != 1 or x.shape != y.shape or x.size < 2:
+            raise ValueError("Each spectrum needs at least two paired energy and intensity values.")
+        if not np.isfinite(x).all():
+            raise ValueError("The photon-energy axis contains invalid values.")
+        steps = np.diff(x)
+        if not (np.all(steps > 0) or np.all(steps < 0)):
+            raise ValueError("The photon-energy axis must be strictly increasing or decreasing.")
+    if rx[0] > rx[-1]:
+        rx, ry = rx[::-1], ry[::-1]
+    overlap = (sx >= rx[0]) & (sx <= rx[-1])
+    energy = sx[overlap]
+    with np.errstate(over="ignore", invalid="ignore"):
+        difference = sy[overlap] - multiplier * np.interp(energy, rx, ry)
+    finite = np.isfinite(difference)
+    if np.count_nonzero(finite) < 2:
+        raise ValueError("The spectra have fewer than two valid points on the sample grid in the energy overlap.")
+    # Retain gaps in the overlap so plotting does not join invalid points.
+    difference[~finite] = np.nan
+    return energy, difference
 
 def _proc_safe_post_normalize(viewer, x, y, mode):
     """Module-level wrapper used across the codebase for post-normalization.
@@ -185,8 +215,9 @@ class ProcessingMixin:
             return self._apply_automatic_bg_new( main_x, main_y, do_plot=False)
         return np.zeros_like(main_y)
 
-    def compute_main_curve(self):
-        if self.chk_sum.isChecked():
+    def compute_main_curve(self, *, dataset_key=None, report=False):
+        """Resolve the selected spectrum, optionally reporting its I₀ status."""
+        if self.chk_sum.isChecked() and dataset_key is None:
             sum_y, x_ref = None, None
             for combined_label, y_data in self.plot_data.items():
                 if not self.raw_visibility.get(combined_label, True):
@@ -196,7 +227,7 @@ class ProcessingMixin:
                     continue
                 abs_path, hdf5_path = parts
                 parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
-                x_data = lookup_energy(self, abs_path, parent, len(y_data))
+                x_data = lookup_energy(self, abs_path, parent, len(y_data), dataset_key=combined_label)
                 processed_y = apply_normalization(self, abs_path, parent, y_data)
                 if sum_y is None:
                     sum_y = processed_y.copy()
@@ -208,17 +239,20 @@ class ProcessingMixin:
             return x_ref, sum_y
         else:
             for combined_label, y_data in self.plot_data.items():
-                if not self.raw_visibility.get(combined_label, True):
+                if (not self.raw_visibility.get(combined_label, True)
+                        or (dataset_key is not None and combined_label != dataset_key)):
                     continue
                 parts = combined_label.split("##", 1)
                 if len(parts) == 2:
                     abs_path, hdf5_path = parts
                     parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
-                    return (
-                        lookup_energy(self, abs_path, parent, len(y_data)),
-                        apply_normalization(self, abs_path, parent, y_data),
-                    )
-        return None, None
+                    energy = lookup_energy(self, abs_path, parent, len(y_data), dataset_key=combined_label)
+                    signal = apply_normalization(self, abs_path, parent, y_data, report=report)
+                    if report:
+                        y, normalized = signal
+                        return energy, y, normalized
+                    return energy, signal
+        return (None, None, False) if report else (None, None)
 
     def _safe_post_normalize(self, x, y, mode):
         """Robust post-normalization on finite data.
@@ -385,12 +419,7 @@ class ProcessingMixin:
 
     def open_curve_summation_dialog(self):
         """Open the Curve summation dialog and create summed curves."""
-        try:
-            plot_data = getattr(self, "plot_data", {}) or {}
-            raw_vis = getattr(self, "raw_visibility", {}) or {}
-            keys = [k for k in plot_data.keys() if raw_vis.get(k, False)]
-        except Exception:
-            keys = []
+        keys = list(self._drawn_spectra())
 
         from PyQt6.QtWidgets import QMessageBox, QDialog
         if len(keys) < 1:
@@ -405,7 +434,7 @@ class ProcessingMixin:
         for k in keys:
             try:
                 parts = str(k).split("##", 1)
-                disp = (
+                disp = getattr(self, "curve_display_names", {}).get(k) or (
                     self.shorten_label(parts[1])
                     if (len(parts) == 2 and hasattr(self, "shorten_label"))
                     else (parts[1] if len(parts) == 2 else str(k))
@@ -413,6 +442,9 @@ class ProcessingMixin:
             except Exception:
                 disp = str(k)
             curves.append((k, disp))
+        curves = [(key, label) for key, (label,) in self._distinct_spectrum_labels(
+            {key: (label,) for key, label in curves}
+        ).items()]
 
         try:
             from .widgets.curve_summation_dialog import CurveSummationDialog
@@ -511,7 +543,7 @@ class ProcessingMixin:
         xy = []
         for k, abs_path, parent, y in parsed:
             try:
-                x = lookup_energy(self, abs_path, parent, int(y.size))
+                x = lookup_energy(self, abs_path, parent, int(y.size), dataset_key=k)
                 x = np.asarray(x, dtype=float).ravel()
                 n = int(min(x.size, y.size))
                 if n < 2:
@@ -770,12 +802,13 @@ class ProcessingMixin:
             return
 
 
-        self.proc_ax.plot(np.asarray(main_x)[_mplot], sub[_mplot], label="Background subtracted")
+        line, = self.proc_ax.plot(np.asarray(main_x)[_mplot], sub[_mplot], label="Background subtracted")
         try:
             self.proc_ax.relim(); self.proc_ax.autoscale_view(); self.proc_ax.figure.tight_layout(); self.canvas_proc.draw_idle()
         except Exception:
             pass
         self.proc_ax.set_xlabel("Photon energy (eV)")
+        return line
 
     def init_manual_mode(self, main_x, main_y, auto_bg=None):
         """Prepare manual background mode: anchors + events.

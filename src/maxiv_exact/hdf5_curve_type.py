@@ -12,14 +12,17 @@ def is_measurement_path(path: str) -> bool:
     return "measurement" in str(path).strip("/").split("/")
 
 
+def is_derived_spectrum_path(path: str) -> bool:
+    return str(path).lstrip("/").startswith(("__SUM__/", "__DIFF__/"))
+
+
 def is_processed_xas_path(path: str) -> bool:
     """Allow real measurement curves and existing synthetic XAS curves.
 
     Synthetic records are created by EXACT (sums and FA transfers), carry
     independently cached energy axes, and are not generic HDF5 metadata.
     """
-    normalized = str(path).lstrip("/")
-    return is_measurement_path(normalized) or normalized.startswith("__SUM__/")
+    return is_measurement_path(path) or is_derived_spectrum_path(path)
 
 
 def is_plottable_dtype(dtype) -> bool:

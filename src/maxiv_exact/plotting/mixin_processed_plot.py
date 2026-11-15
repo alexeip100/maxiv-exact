@@ -9,6 +9,9 @@ calls those methods when group mode is active.
 
 from __future__ import annotations
 
+from collections import Counter
+from pathlib import Path
+
 import numpy as np
 
 from ..data import lookup_energy
@@ -26,7 +29,8 @@ class ProcessedPlotMixin:
 
         self.proc_ax.clear()
         for combined_label, y_data in (getattr(self, "plot_data", {}) or {}).items():
-            if not self.raw_visibility.get(combined_label, True):
+            if (not self.raw_visibility.get(combined_label, True)
+                    or combined_label in getattr(self, "_difference_sources", {})):
                 continue
             parts = str(combined_label).split("##", 1)
             if len(parts) != 2:
@@ -44,7 +48,7 @@ class ProcessedPlotMixin:
 
             # Robustly get x
             try:
-                x_data = lookup_energy(self, abs_path, parent, int(y_arr.size))
+                x_data = lookup_energy(self, abs_path, parent, int(y_arr.size), dataset_key=combined_label)
                 x_arr = np.asarray(x_data, dtype=float).ravel()
             except Exception:
                 continue
@@ -53,10 +57,11 @@ class ProcessedPlotMixin:
 
             # Apply normalization
             try:
-                processed_y = processing.apply_normalization(self, abs_path, parent, y_arr)
+                processed_y, normalized = processing.apply_normalization(self, abs_path, parent, y_arr, report=True)
                 processed_y = np.asarray(processed_y, dtype=float).ravel()
             except Exception:
                 processed_y = y_arr
+                normalized = False
 
             mlen = int(min(x_arr.size, processed_y.size))
             if mlen < 2:
@@ -75,6 +80,7 @@ class ProcessedPlotMixin:
                     color=self._get_persistent_curve_color(combined_label),
                 )
                 line.dataset_key = combined_label
+                line.processing_state = self._spectrum_processing_state(normalized)
             except Exception:
                 continue
 
@@ -109,6 +115,184 @@ class ProcessedPlotMixin:
             return None, None
         return None, None
 
+    def _drawn_spectra(self):
+        """Only checked spectrum artists, excluding backgrounds and previews."""
+        checked = set(self._visible_processed_keys())
+        return {line.dataset_key: line for line in self.proc_ax.lines
+                if line.get_visible() and getattr(line, "dataset_key", None) in checked}
+
+    def _group_bg_is_active(self):
+        checkbox = getattr(self, "chk_group_bg", None)
+        return bool(checkbox is not None and checkbox.isEnabled() and checkbox.isChecked())
+
+    def _update_spectra_actions(self):
+        if hasattr(self, "spectra_button"):
+            count = len(self._drawn_spectra())
+            self.sum_spectra_action.setEnabled(count > 0)
+            self.calibrate_energy_action.setEnabled(count > 0 and not self._group_bg_is_active())
+            self.subtract_spectra_action.setEnabled(count >= 2)
+
+    def _spectra_dialog_inputs(self):
+        spectra = {}
+        for key, line in self._drawn_spectra().items():
+            source_file, path = key.split("##", 1)
+            label = self.curve_display_names.get(key) or self.shorten_label(path)
+            _, has_energy = lookup_energy(self, source_file, path.rpartition("/")[0],
+                                          len(self.plot_data[key]), report=True)
+            spectra[key] = label, line, has_energy
+        return spectra
+
+    @staticmethod
+    def _distinct_spectrum_labels(spectra):
+        labels = Counter(label for label, *_ in spectra.values())
+        source_names = Counter(Path(source).name for source in {
+            key.split("##", 1)[0] for key in spectra
+        })
+        result = {}
+        for key, (label, *data) in spectra.items():
+            if labels[label] > 1:
+                source, dataset = key.split("##", 1)
+                filename = Path(source).name
+                label = f"{label} · {filename if source_names[filename] == 1 else source} · {dataset}"
+            result[key] = label, *data
+        return result
+
+    def open_energy_calibration_dialog(self):
+        from PyQt6.QtWidgets import QDialog
+        from ..widgets.spectra_dialogs import EnergyCalibrationDialog
+
+        if self._group_bg_is_active():
+            return
+        spectra = self._spectra_dialog_inputs()
+        if not spectra:
+            return
+        dialog = EnergyCalibrationDialog(self, {
+            key: (label, line, self._energy_shifts.get(key, 0.0), has_energy)
+            for key, (label, line, has_energy) in self._distinct_spectrum_labels(spectra).items()
+        })
+        self._spectra_preview_dialog = dialog
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        self._spectra_preview_dialog = None
+        shifts = dialog.shifts()
+        dialog.deleteLater()
+        if not accepted or self._group_bg_is_active():
+            return
+        changed = {key: shift for key, shift in shifts.items()
+                   if shift != self._energy_shifts.get(key, 0.0)}
+        if not changed:
+            return
+        # Shift manual background anchors with their spectrum so the existing
+        # background and corrected intensities translate together.
+        sources = [key for key in spectra if key not in self._difference_sources]
+        if self.manual_mode and len(sources) == 1:
+            key = sources[0]
+            if key in changed:
+                delta = changed[key] - self._energy_shifts.get(key, 0.0)
+                for point in self.manual_points:
+                    point["x"] += delta
+        limits = self.proc_ax.get_xlim(), self.proc_ax.get_ylim()
+        auto_x, auto_y = self.proc_ax.get_autoscalex_on(), self.proc_ax.get_autoscaley_on()
+        for key, shift in changed.items():
+            if shift:
+                self._energy_shifts[key] = shift
+            else:
+                self._energy_shifts.pop(key, None)
+        self.update_plot_raw()
+        self.update_plot_processed()
+        self.proc_ax.set_xlim(limits[0], auto=auto_x)
+        self.proc_ax.set_ylim(limits[1], auto=auto_y)
+        self.canvas_proc.draw_idle()
+
+    def open_spectrum_subtraction_dialog(self):
+        from PyQt6.QtWidgets import QDialog
+        from ..widgets.spectra_dialogs import SpectrumSubtractionDialog
+
+        spectra = self._spectra_dialog_inputs()
+        if len(spectra) < 2:
+            return
+        states = [getattr(line, "processing_state", {}) for _, line, _ in spectra.values()]
+        if any(state.get("group_bg") for state in states):
+            state = "Group BG with subtraction" if self.chk_show_without_bg.isChecked() else "Group BG with backgrounds shown"
+        elif any(state.get("i0_applied") for state in states):
+            state = "I₀-normalized where available"
+        else:
+            state = "No I₀ normalization applied"
+        if any(item.get("snapshot") for item in states):
+            state += " · saved differences use snapshot data"
+        dialog = SpectrumSubtractionDialog(self, self._distinct_spectrum_labels(spectra), state)
+        self._spectra_preview_dialog = dialog
+        accepted = dialog.exec() == QDialog.DialogCode.Accepted
+        self._spectra_preview_dialog = None
+        if accepted:
+            ref = dialog.reference.currentData()
+            reference = self._difference_input_info(ref, spectra)
+            mode = dialog.mode.currentText()
+            multiplier = dialog.multiplier.value()
+            for key, (x, y) in dialog.results.items():
+                self._add_difference_snapshot(x, y, self._difference_input_info(key, spectra),
+                                              reference, mode, multiplier)
+            self.update_plot_raw()
+            self.update_plot_processed()
+        dialog.deleteLater()
+
+    def _difference_input_info(self, key, spectra):
+        label, line, _ = spectra[key]
+        source_file, dataset = key.split("##", 1)
+        state = dict(line.processing_state)
+        if "group_inputs" in state:
+            state["group_inputs"] = {
+                member: self._energy_shifts.get(member, 0.0) for member in state["group_inputs"]
+            }
+        prior = self._difference_sources.get(key)
+        return dict(key=key, name=label, source_file=None if prior else source_file,
+                    dataset=dataset, shift=self._energy_shifts.get(key, 0.0),
+                    processing=state, difference=prior,
+                    summed_inputs=tuple(getattr(self, "_summed_curve_sources", {}).get(key, ())))
+
+    def _add_difference_snapshot(self, x, y, sample, reference, mode, multiplier):
+        names = set(self.curve_display_names.values())
+        while True:
+            self._difference_serial += 1
+            serial = self._difference_serial
+            name = f"Diff {serial}: {sample['name']} − {reference['name']}"
+            if name not in names:
+                break
+        # A synthetic source keeps snapshots independent of closing source files.
+        source, parent = "__DIFF__", f"__DIFF__/{serial}"
+        key = f"{source}##{parent}/difference"
+        self.plot_data[key] = y
+        self.energy_cache[f"{source}::{parent}"] = (x, True)
+        self.raw_visibility[key] = True
+        self.curve_display_names[key] = name
+        if not hasattr(self, "_region_overrides"):
+            self._region_overrides = {}
+        self._region_overrides[key] = {"start": float(x.min()), "end": float(x.max())}
+        self._difference_sources[key] = dict(
+            sample=sample, reference=reference, mode=mode, multiplier=multiplier,
+            operation="Sample − k × Reference", interpolation="linear within overlap",
+        )
+
+    def _spectrum_processing_state(self, normalized, *, background="None", subtracted=False,
+                                   post_normalization="None", group_bg=False, **details):
+        return dict(
+            i0_channel=self.combo_norm.currentText() if self.chk_normalize.isChecked() else None,
+            i0_applied=bool(self.chk_normalize.isChecked() and normalized),
+            group_bg=group_bg, background=background, background_subtracted=subtracted,
+            post_normalization=post_normalization, **details,
+        )
+
+    def _plot_difference_snapshots(self):
+        for key in self._visible_processed_keys():
+            if key not in getattr(self, "_difference_sources", {}):
+                continue
+            abs_path, path = key.split("##", 1)
+            y = self.plot_data[key]
+            x = lookup_energy(self, abs_path, path.rsplit("/", 1)[0], len(y), dataset_key=key)
+            line, = self.proc_ax.plot(x, y, label=self.curve_display_names[key],
+                                      color=self._get_persistent_curve_color(key))
+            line.dataset_key = key
+            line.processing_state = {"snapshot": True}
+
     def _set_nexafs_group(self, group=None, reason=GROUP_REQUIRED):
         self._nexafs_group = group
         button = getattr(self, "nexafs_fit_button", None)
@@ -117,6 +301,13 @@ class ProcessedPlotMixin:
             button.setToolTip(reason if group is None else "Open the captured Group BG spectra.")
 
     def update_plot_processed(self):
+        dialog = getattr(self, "_spectra_preview_dialog", None)
+        if dialog is not None and dialog.isVisible():
+            dialog.reject()
+        self._refresh_processed_plot()
+        self._update_spectra_actions()
+
+    def _refresh_processed_plot(self):
         self._set_nexafs_group()
         # Keep the isolated self-absorption launcher in sync with Processed Data state.
         try:
@@ -147,8 +338,11 @@ class ProcessedPlotMixin:
 
         visible_curves = 0
         try:
-            visible_curves = len([key for key in self.plot_data if self.raw_visibility.get(key, False)])
+            source_keys = [key for key in self._visible_processed_keys()
+                           if key not in getattr(self, "_difference_sources", {})]
+            visible_curves = len(source_keys)
         except Exception:
+            source_keys = []
             visible_curves = 0
 
         # Determine background mode from UI
@@ -192,6 +386,7 @@ class ProcessedPlotMixin:
             # Default behaviour: multiple curves without sum -> show only normalized curves, no BG controls.
             self._toggle_bg_widgets(False)
             self._plot_multiple_no_bg()
+            self._plot_difference_snapshots()
             self.proc_ax.figure.tight_layout()
             self.canvas_proc.draw()
             self.update_pass_button_state()
@@ -208,6 +403,7 @@ class ProcessedPlotMixin:
                 print("Group Auto BG plotting failed:", ex)
                 self._plot_multiple_no_bg()
                 group, reason = None, "Group BG processing failed for the current selection."
+            self._plot_difference_snapshots()
             try:
                 self._draw_preedge_vline(getattr(self, "_proc_last_x", None))
             except Exception:
@@ -226,9 +422,16 @@ class ProcessedPlotMixin:
             self._set_nexafs_group(group, reason)
             return
 
-        main_x, main_y = self.compute_main_curve()
+        main_line = None
+        normalized = False
+        if self.chk_sum.isChecked():
+            main_x, main_y = self.compute_main_curve()
+        elif source_keys:
+            main_x, main_y, normalized = self.compute_main_curve(dataset_key=source_keys[0], report=True)
+        else:
+            main_x, main_y = None, None
         if main_x is not None and main_y is not None:
-            self.proc_ax.plot(main_x, main_y, label="Main curve")
+            main_line, = self.proc_ax.plot(main_x, main_y, label="Main curve")
 
         new_sum_state = self.chk_sum.isChecked()
         new_norm_state = self.chk_normalize.isChecked()
@@ -280,7 +483,21 @@ class ProcessedPlotMixin:
                 self.manual_bg_line = None
 
         if self.chk_show_without_bg.isChecked() and main_x is not None and main_y is not None:
-            self._show_subtracted_only(mode, main_x, main_y)
+            main_line = self._show_subtracted_only(mode, main_x, main_y)
+
+        if main_line is not None and len(source_keys) == 1:
+            main_line.dataset_key = source_keys[0]
+            subtracted = self.chk_show_without_bg.isChecked()
+            main_line.processing_state = self._spectrum_processing_state(
+                normalized, background=mode, subtracted=subtracted,
+                post_normalization=self.combo_post_norm.currentText()
+                if subtracted and self.combo_post_norm.isEnabled() else "None",
+                polynomial_degree=self.combo_poly.currentText(),
+                pre_edge_percent=self.spin_preedge.value(),
+                manual_anchors=[(p["x"], p["y"]) for p in self.manual_points] if mode == "Manual" else [],
+            )
+
+        self._plot_difference_snapshots()
 
         try:
             if str(mode) in ("Automatic", "Auto") and main_x is not None:

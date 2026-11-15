@@ -134,12 +134,25 @@ class ExportMixin:
         first_line = self.plotted_lines[visible_keys[0]]
         x_data = np.asarray(first_line.get_xdata())
         min_len = len(x_data)
+        metadata = getattr(self, "plotted_metadata", {})
+        differences = {key for key in visible_keys if "difference" in metadata.get(key, {})}
+        if differences and any(not np.array_equal(self.plotted_lines[key].get_xdata(), x_data)
+                               for key in visible_keys):
+            QMessageBox.warning(
+                self, "Export Not Possible",
+                "The visible curves have different energy grids. Export each difference separately.",
+            )
+            return
 
         headers = []
         y_columns = []
 
         if legend_mode_norm.startswith("entry"):
             for key in visible_keys:
+                if key in differences:
+                    headers.append(self._legend_label_from_entry_number(key, self.plotted_lines[key]))
+                    y_columns.append(np.asarray(self.plotted_lines[key].get_ydata()))
+                    continue
                 entry_num = _entry_digits_from_meta(key)
                 if not entry_num:
                     QMessageBox.warning(
@@ -164,6 +177,8 @@ class ExportMixin:
                 except Exception:
                     lbl = None
                 lbl = "" if lbl is None else str(lbl).strip()
+                if key in differences and (not lbl or lbl == "<select curve name>"):
+                    lbl = self._legend_label_from_entry_number(key, self.plotted_lines[key])
                 if (not lbl) or (lbl == "<select curve name>"):
                     QMessageBox.warning(
                         self,
@@ -234,11 +249,17 @@ class ExportMixin:
             return
 
         try:
-            with open(file_path, "w", newline="") as f:
+            with open(file_path, "w", newline="", encoding="utf-8" if differences else None) as f:
                 writer = csv.writer(f)
                 writer.writerow(header_row)
-                for i in range(min_len):
-                    row = [f"{x_out[i]:.6g}"] + [f"{col[i]:.6g}" for col in y_out]
+                energy_precision = ".17g" if differences or any(
+                    metadata.get(key, {}).get("energy_shift", 0) for key in visible_keys
+                ) else ".6g"
+                intensity_precision = ".17g" if differences else ".6g"
+                for i in range(len(x_out)):
+                    row = [format(x_out[i], energy_precision)] + [
+                        format(col[i], intensity_precision) for col in y_out
+                    ]
                     writer.writerow(row)
         except Exception as ex:
             QMessageBox.critical(self, "Export Error", f"Failed to write CSV:\n{ex}")
@@ -442,6 +463,10 @@ class ExportMixin:
         # --------------------------------------------------------------
         visible_keys = [k for k in self.plot_data if self.raw_visibility.get(k, False)]
         num_visible  = len(visible_keys)
+        if num_visible == 0:
+            return
+        difference_key = visible_keys[0] if num_visible == 1 else None
+        difference = getattr(self, "_difference_sources", {}).get(difference_key)
         if num_visible > 1 and not self.chk_sum.isChecked():
             QMessageBox.warning(self, "Export Not Possible",
                                 "Please sum the curves up first or select only one curve.")
@@ -462,6 +487,8 @@ class ExportMixin:
             file_id_part = "entries" + "_".join(e.replace('entry','') for e in entries_sorted)
 
         default_name = f"ProcessedScan_for_{file_id_part}.csv"
+        if difference is not None:
+            default_name = f"Difference_{difference_key.split('/')[-2]}.csv"
         default_dir = self._csv_save_start_dir(default_dir)
         default_path = os.path.join(default_dir, default_name)
 
@@ -471,6 +498,21 @@ class ExportMixin:
         if not save_path:
             return
         self._remember_csv_save_path(save_path)
+
+        if difference is not None:
+            from .data import lookup_energy
+
+            source, dataset = difference_key.split("##", 1)
+            y = self.plot_data[difference_key]
+            x = lookup_energy(self, source, dataset.rpartition("/")[0], len(y), dataset_key=difference_key)
+            try:
+                with open(save_path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Photon energy (eV)", self.curve_display_names[difference_key]])
+                    writer.writerows(zip(x, y))
+            except OSError as error:
+                QMessageBox.warning(self, "Export failed", str(error))
+            return
 
 # ---
         # 2.  Get arrays + post-norm mode
@@ -509,13 +551,16 @@ class ExportMixin:
 # ---
         # 5.  Write CSV
         # --------------------------------------------------------------
+        energy_precision = ".12g" if any(
+            key in getattr(self, "_energy_shifts", {}) for key in visible_keys
+        ) else ".6g"
         try:
             with open(save_path, "w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(["X", col2, col3, "Y_bckd", col5])
                 for i in range(len(x_array)):
                     writer.writerow([
-                        f"{x_array[i]:.6g}",
+                        format(x_array[i], energy_precision),
                         f"{y_raw_array[i]:.6g}",
                         f"{y_norm_array[i]:.6g}",
                         f"{y_bkg_array[i]:.6g}",

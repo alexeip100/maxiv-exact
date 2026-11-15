@@ -164,6 +164,8 @@ All three tabs use the same basic plot/sidebar layout. The vertical divider is d
 ---
 
 ## Raw Data tab
+
+Raw Data shows measured spectra at their original photon energies. Applied energy corrections, sums, and differences are shown in **Processed Data**.
 Purpose: select and inspect raw curves.
 
 ### Channel family selectors
@@ -214,18 +216,22 @@ Dropdown enabled only when **Normalize by I₀?** is checked.
 
 Candidates come from the channel mapping profile.
 
-#### **Sum up?**
-Opens the curve summation dialog to create new summed curves from selected curves. Mainly used when you have collected multiple scans from each sample for better statistics, and want to sum them up in groups corresponding to samples before proceeding with further treatment.
+#### **Spectra**
+Choose **Sum spectra…**, **Calibrate E…**, or **Subtract spectra…**. Each action uses only the spectra currently drawn in **Processed Data**.
 
-**See also (How to):** *Sum curves (“Sum up?” dialog)*
+- **Sum spectra…** groups repeat scans and creates summed curves.
+- **Calibrate E…** previews independent photon-energy shifts in eV. Apply corrections before enabling **Group BG**. Reopening the dialog shows the corrections already applied.
+- **Subtract spectra…** previews one sample or a series minus a common reference, using the entered reference multiplier. The created curves retain the processing of the inputs at creation.
 
 
 #### Summed groups: right-click menu (Processed Data tree)
-When you create a summed curve using **Sum up?**, it appears as a *group curve* in the **Processed Data** tree.
+When you create a summed curve using **Spectra → Sum spectra…**, it appears as a *group curve* in the **Processed Data** tree.
 Right-click the group name to access:
 - **Group info**: shows which curves were used to build the group.
 - **Rename**: changes the group name (and updates the label in **Plotted Data** if that curve is present there).
 - **Delete**: removes the summed group after an OK/Cancel warning. (Curves already passed to **Plotted Data** are not removed automatically.)
+
+Difference curves have **Origin / processing information…**, **Rename…**, and **Delete** in the same tree. Select a single difference and use **Export** to save its photon-energy and difference columns. Export series members individually so each keeps its own energy grid. Export results you need after restarting EXACT.
 
 
 #### **Group BG**

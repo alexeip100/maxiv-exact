@@ -559,6 +559,9 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self._hdf5_all_channel_cache = {}
         self.plot_data = {}      # Keys: "abs_path##hdf5_path"
         self.energy_cache = {}
+        self._energy_shifts = {}
+        self._difference_sources = {}
+        self._difference_serial = 0
 
         # Channel mapping (beamline profiles)
         # Default: FlexPES-A (can be edited via the "Setup channels" dialog).
@@ -852,9 +855,19 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
             self.chk_sum.setVisible(False)
         except Exception:
             pass
-        self.btn_sum = QPushButton("Sum up?")
-        self.btn_sum.setToolTip("Create summed curves from selected spectra")
-        self.proc_controls_top_layout.addWidget(self.btn_sum)
+        self.spectra_button = QToolButton()
+        self.spectra_button.setText("Spectra")
+        self.spectra_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        spectra_menu = QMenu(self.spectra_button)
+        self.sum_spectra_action = spectra_menu.addAction("Sum spectra…")
+        self.calibrate_energy_action = spectra_menu.addAction("Calibrate E…")
+        self.subtract_spectra_action = spectra_menu.addAction("Subtract spectra…")
+        self.sum_spectra_action.triggered.connect(self.open_curve_summation_dialog)
+        self.calibrate_energy_action.triggered.connect(self.open_energy_calibration_dialog)
+        self.subtract_spectra_action.triggered.connect(self.open_spectrum_subtraction_dialog)
+        spectra_menu.aboutToShow.connect(self._update_spectra_actions)
+        self.spectra_button.setMenu(spectra_menu)
+        self.proc_controls_top_layout.addWidget(self.spectra_button)
 
         # Group background (Automatic BG + multiple selection)
         self.chk_group_bg = QCheckBox("Group BG")
@@ -910,12 +923,6 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         else:
             self.chk_sum.stateChanged.connect(self.update_plot_processed)
 
-        # Advanced summation dialog (preferred)
-        try:
-            if hasattr(self, "open_curve_summation_dialog"):
-                self.btn_sum.clicked.connect(self.open_curve_summation_dialog)
-        except Exception:
-            pass
         self.chk_normalize.stateChanged.connect(self._on_normalize_toggled)
         self.combo_norm.currentIndexChanged.connect(self.update_plot_processed)
 

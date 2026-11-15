@@ -430,7 +430,7 @@ class GroupBackgroundMixin:
                 continue
             if y_arr.size < 2:
                 continue
-            x_data = lookup_energy(self, abs_path, parent, int(y_arr.size))
+            x_data = lookup_energy(self, abs_path, parent, int(y_arr.size), dataset_key=key)
             try:
                 x_arr = np.asarray(x_data, dtype=float).ravel()
             except Exception:
@@ -732,7 +732,8 @@ class GroupBackgroundMixin:
         except Exception:
             pass
 
-        keys = self._visible_processed_keys()
+        keys = [key for key in self._visible_processed_keys()
+                if key not in getattr(self, "_difference_sources", {})]
         if not keys:
             return None, GROUP_REQUIRED
 
@@ -762,6 +763,7 @@ class GroupBackgroundMixin:
         items = {}
         problems = {}
         labels = {}
+        input_status = {}
         for key in keys:
             parts = key.split("##", 1)
             if len(parts) != 2:
@@ -777,7 +779,8 @@ class GroupBackgroundMixin:
                 continue
             if y_arr.size < 2:
                 continue
-            x_data, has_energy = lookup_energy(self, abs_path, parent, int(y_arr.size), report=True)
+            x_data, has_energy = lookup_energy(self, abs_path, parent, int(y_arr.size),
+                                               report=True, dataset_key=key)
             try:
                 x_arr = np.asarray(x_data, dtype=float).ravel()
             except Exception:
@@ -800,6 +803,7 @@ class GroupBackgroundMixin:
             )
             bg = np.asarray(bg, dtype=float).ravel()[:mlen]
             items[key] = (x_use, y_use, bg, hdf5_path)
+            input_status[key] = normalized, auto_complete
             label = (getattr(self, "curve_display_names", None) or {}).get(key) or self.shorten_label(hdf5_path)
             labels[key] = label
             if not has_energy:
@@ -908,6 +912,14 @@ class GroupBackgroundMixin:
                 self.proc_ax.plot(x_use, bg, linestyle="--", linewidth=1.2, alpha=0.65, color=line.get_color(), label="_bg")
             try:
                 line.dataset_key = key
+                normalized, auto_complete = input_status[key]
+                line.processing_state = self._spectrum_processing_state(
+                    normalized, background="Auto", subtracted=subtract, group_bg=True,
+                    post_normalization=norm_mode if subtract else "None",
+                    polynomial_degree=deg, pre_edge_percent=pre * 100,
+                    match_pre_edge=_match_slope, equalization_applied=key in equalized,
+                    background_fit_completed=auto_complete, group_inputs=tuple(items),
+                )
             except Exception:
                 pass
 

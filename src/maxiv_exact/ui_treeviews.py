@@ -397,20 +397,24 @@ class TreeViewMixin:
                 return
             key = str(key)
             sources = getattr(self, "_summed_curve_sources", {}) or {}
-            if key not in sources:
+            is_difference = key in getattr(self, "_difference_sources", {})
+            if key not in sources and not is_difference:
                 return
             from PyQt6.QtWidgets import QMenu
             menu = QMenu(tree)
-            act_info = menu.addAction("Group info")
-            act_rename = menu.addAction("Rename")
+            act_info = menu.addAction("Origin / processing information…" if is_difference else "Group info")
+            act_rename = menu.addAction("Rename…" if is_difference else "Rename")
             act_delete = menu.addAction("Delete")
             chosen = menu.exec(tree.viewport().mapToGlobal(pos))
             if chosen is None:
                 return
             if chosen == act_info:
-                self._show_summed_group_info(key)
+                if is_difference:
+                    self._show_difference_info(key)
+                else:
+                    self._show_summed_group_info(key)
             elif chosen == act_rename:
-                self._rename_summed_group(key, item)
+                self._rename_summed_group(key, item, is_difference=is_difference)
             elif chosen == act_delete:
                 self._delete_summed_group(key)
         except Exception:
@@ -441,7 +445,65 @@ class TreeViewMixin:
         title = gname if gname else "Summed group"
         QMessageBox.information(self, "Group info", f"<b>{title}</b><br><br>Constituent curves:<br>" + "<br>".join(lines))
 
-    def _rename_summed_group(self, sum_key: str, item):
+    def _show_difference_info(self, key):
+        from PyQt6.QtWidgets import QMessageBox
+
+        origin = self._difference_sources[key]
+        lines = [
+            self.curve_display_names[key],
+            f"{origin['mode']} · Sample − {origin['multiplier']:g} × Reference",
+            "Linear interpolation on the sample grid within the energy overlap.",
+        ]
+        for role in ("sample", "reference"):
+            entry = origin[role]
+            state = entry["processing"]
+            lines.extend(["", f"{role.title()} · {entry['name']}", f"ID: {entry['key']}",
+                          f"Source file: {entry['source_file'] or 'Derived spectrum'}",
+                          f"Dataset: {entry['dataset']}", f"Energy shift: {entry['shift']:+g} eV"])
+            if state.get("snapshot"):
+                prior = entry["difference"]
+                lines.append(f"Difference snapshot · {prior['mode']} · k = {prior['multiplier']:g}")
+                lines.extend(f"  {r.title()}: {prior[r]['name']} ({prior[r]['key']})"
+                             for r in ("sample", "reference"))
+            else:
+                channel = state["i0_channel"]
+                if state["i0_applied"]:
+                    lines.append(f"I₀ normalization: {channel}")
+                elif channel:
+                    lines.append(f"I₀ normalization unavailable for {channel}")
+                else:
+                    lines.append("I₀ normalization: off")
+                lines.extend([
+                    "Group BG: on" if state["group_bg"] else "Group BG: off",
+                    f"Background: {state['background']}"
+                    + (" (subtracted)" if state["background_subtracted"] else ""),
+                    f"Post-normalization: {state['post_normalization']}",
+                ])
+                if state["background"] != "None":
+                    lines.append(f"Polynomial degree {state['polynomial_degree']}, "
+                                 f"pre-edge {state['pre_edge_percent']:g}%")
+                if state["group_bg"]:
+                    lines.append("Match pre-edge: on" if state["match_pre_edge"] else "Match pre-edge: off")
+                    if not state["background_fit_completed"]:
+                        lines.append("The automatic background used a fallback.")
+                    if state["background_subtracted"]:
+                        lines.append("Group equalization: applied" if state["equalization_applied"]
+                                     else "Group equalization: unavailable")
+                if entry["summed_inputs"]:
+                    lines.append("Summed inputs:")
+                    lines.extend(f"  {member}" for member in entry["summed_inputs"])
+        message = QMessageBox(self)
+        message.setWindowTitle("Origin / processing information")
+        message.setTextFormat(Qt.TextFormat.PlainText)
+        message.setText("\n".join(lines))
+        if any(origin[role]["processing"].get("group_inputs") for role in ("sample", "reference")):
+            members = origin["sample"]["processing"].get("group_inputs") or origin["reference"]["processing"]["group_inputs"]
+            message.setDetailedText("Group BG members and energy shifts\n" + "\n".join(
+                f"{member}: {shift:+g} eV" for member, shift in members.items()
+            ))
+        message.exec()
+
+    def _rename_summed_group(self, sum_key: str, item, *, is_difference=False):
         """Rename a summed group and propagate the label to Plotted Data (if present)."""
         from PyQt6.QtWidgets import QInputDialog
         current = ""
@@ -450,11 +512,17 @@ class TreeViewMixin:
             current = str(cdn.get(sum_key) or "")
         except Exception:
             current = ""
-        new_name, ok = QInputDialog.getText(self, "Rename group", "New group name:", text=current)
+        title = "Rename difference" if is_difference else "Rename group"
+        new_name, ok = QInputDialog.getText(self, title, "New name:", text=current)
         if not ok:
             return
         new_name = str(new_name).strip()
         if not new_name:
+            return
+        if is_difference and any(key != sum_key and name == new_name
+                                 for key, name in self.curve_display_names.items()):
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, title, "That name is already in use.")
             return
         try:
             if not hasattr(self, "curve_display_names") or self.curve_display_names is None:
@@ -467,6 +535,11 @@ class TreeViewMixin:
         except Exception:
             pass
         self._update_plotted_curve_label(sum_key, new_name)
+        if is_difference:
+            meta = getattr(self, "plotted_metadata", {}).get(sum_key)
+            if meta is not None:
+                meta["display_name"] = new_name
+            self.update_plot_processed()
         try:
             self.update_legend()
         except Exception:
@@ -501,17 +574,25 @@ class TreeViewMixin:
         """
         from PyQt6.QtWidgets import QMessageBox
         sources = getattr(self, "_summed_curve_sources", {}) or {}
-        if sum_key not in sources:
+        differences = getattr(self, "_difference_sources", {})
+        is_difference = sum_key in differences
+        if sum_key not in sources and not is_difference:
             return
         msg = QMessageBox(self)
         msg.setIcon(QMessageBox.Icon.Warning)
-        msg.setWindowTitle("Delete group")
-        msg.setText("Delete this summed group from the Processed Data set?")
+        msg.setWindowTitle("Delete difference" if is_difference else "Delete group")
+        msg.setText("Delete this difference from Processed Data?" if is_difference
+                    else "Delete this summed group from the Processed Data set?")
         msg.setInformativeText("This cannot be undone. Curves already passed to Plotted Data will NOT be removed.")
         msg.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
         msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
         if msg.exec() != QMessageBox.StandardButton.Ok:
             return
+        if is_difference:
+            differences.pop(sum_key)
+            source, path = sum_key.split("##", 1)
+            self.energy_cache.pop(f"{source}::{path.rpartition('/')[0]}", None)
+            self._energy_shifts.pop(sum_key, None)
         try:
             if hasattr(self, "plot_data") and isinstance(self.plot_data, dict):
                 self.plot_data.pop(sum_key, None)

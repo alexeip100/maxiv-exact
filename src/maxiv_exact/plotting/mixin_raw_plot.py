@@ -20,7 +20,10 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QListWidgetItem, QMessageBox
 
 from ..data import lookup_energy
-from ..hdf5_curve_type import is_measurement_path, is_processed_xas_path, is_plottable_dtype, raw_curve_axis
+from ..hdf5_curve_type import (
+    is_derived_spectrum_path, is_measurement_path, is_processed_xas_path,
+    is_plottable_dtype, raw_curve_axis,
+)
 from .. import processing
 
 try:
@@ -50,7 +53,9 @@ class RawPlotMixin:
             key = visible_keys[0]
         else:
             if len(visible_keys) != 1:
-                # Multi-pass is allowed only for group Auto BG with subtraction enabled.
+                # Multi-pass supports Group BG results and selections of difference snapshots.
+                differences = getattr(self, "_difference_sources", {})
+                snapshots_only = bool(visible_keys) and all(key in differences for key in visible_keys)
                 allow_multi = False
                 try:
                     mode = str(getattr(self, "combo_bg").currentText()) if hasattr(self, "combo_bg") else ""
@@ -69,7 +74,7 @@ class RawPlotMixin:
                 except Exception:
                     allow_multi = False
 
-                if not allow_multi:
+                if not (allow_multi or snapshots_only):
                     QMessageBox.warning(self, "Warning", "Please select exactly one dataset, or enable 'Sum'.")
                     return
 
@@ -96,7 +101,8 @@ class RawPlotMixin:
                     norm_mode = "None"
 
                 # Group backgrounds (fallback handled inside)
-                _x_common, bgs = self._compute_group_auto_backgrounds(visible_keys, deg=deg, pre_edge_percent=pre)
+                source_keys = [key for key in visible_keys if key not in differences]
+                _x_common, bgs = self._compute_group_auto_backgrounds(source_keys, deg=deg, pre_edge_percent=pre)
                 if bgs is None:
                     bgs = {}
 
@@ -115,7 +121,7 @@ class RawPlotMixin:
                     # - optionally, pre-edge slope after BG subtraction is also matched across the group
                     try:
                         items_simple = {}
-                        for key in visible_keys:
+                        for key in source_keys:
                             parts = key.split("##", 1)
                             if len(parts) != 2:
                                 continue
@@ -124,7 +130,7 @@ class RawPlotMixin:
                             y_data = self.plot_data.get(key)
                             if y_data is None:
                                 continue
-                            x_data = lookup_energy(self, abs_path, parent, len(y_data))
+                            x_data = lookup_energy(self, abs_path, parent, len(y_data), dataset_key=key)
                             y_proc = processing.apply_normalization(self, abs_path, parent, y_data)
                             x_arr = np.asarray(x_data, dtype=float).ravel()
                             y_arr = np.asarray(y_proc, dtype=float).ravel()
@@ -181,8 +187,12 @@ class RawPlotMixin:
                         skipped += 1
                         continue
                     main_x, main_y = self._get_drawn_processed_xy(key)
+                    difference = differences.get(key)
                     if main_x is None or main_y is None:
-                        x_data = lookup_energy(self, abs_path, parent, len(y_data))
+                        if difference is not None:
+                            skipped += 1
+                            continue
+                        x_data = lookup_energy(self, abs_path, parent, len(y_data), dataset_key=key)
                         y_proc = processing.apply_normalization(self, abs_path, parent, y_data)
                         mlen = min(len(x_data), len(y_proc))
                         if mlen <= 1:
@@ -238,8 +248,14 @@ class RawPlotMixin:
                         "source_file": source_file or "",
                         "source_entry": source_entry or "",
                         "post_normalization": norm_mode,
+                        "energy_shift": getattr(self, "_energy_shifts", {}).get(key, 0.0),
                         "is_reference": False,
                     }
+                    if difference is not None:
+                        self.plotted_metadata[storage_key].update(
+                            source_file="", post_normalization="None", difference=difference,
+                            display_name=self.curve_display_names[key],
+                        )
 
                     # Add to plot + list
                     if storage_key not in self.custom_labels:
@@ -321,11 +337,12 @@ class RawPlotMixin:
             QMessageBox.warning(self, "Warning", "This curve is already passed for plotting.")
             return
 
+        difference = getattr(self, "_difference_sources", {}).get(key)
         main_x, main_y = self.compute_main_curve()
         if main_x is None or main_y is None:
             return
 
-        used_drawn_processed = False
+        used_drawn_processed = difference is not None
         try:
             if (not self.chk_sum.isChecked()) and hasattr(self, "data_tabs") and int(self.data_tabs.currentIndex()) == 1:
                 cb = getattr(self, "chk_group_bg", None)
@@ -347,6 +364,8 @@ class RawPlotMixin:
             norm_mode = "None"
 
         bg_subtracted = False
+        if difference is not None:
+            norm_mode = "None"
         if (not used_drawn_processed) and self.chk_show_without_bg.isChecked():
             background = self._compute_background(main_x, main_y)
             subtracted = main_y - background
@@ -411,8 +430,13 @@ class RawPlotMixin:
             "source_file": source_file or "",
             "source_entry": source_entry or "",
             "post_normalization": norm_mode,
+            "energy_shift": getattr(self, "_energy_shifts", {}).get(key, 0.0),
             "is_reference": False,
         }
+        if difference is not None:
+            self.plotted_metadata[storage_key].update(
+                source_file="", difference=difference, display_name=self.curve_display_names[key],
+            )
 
         # Add the curve to the plotted axes and list
         if storage_key not in self.custom_labels:
@@ -850,6 +874,7 @@ class RawPlotMixin:
     # ------------ Raw plotting ------------
     def plot_curves(self, ax):
         ax.clear()
+        energy_axes = []
         for combined_label, y_data in list(getattr(self, "plot_data", {}).items()):
             try:
                 if not self.raw_visibility.get(combined_label, True):
@@ -859,6 +884,8 @@ class RawPlotMixin:
                 if len(parts) != 2:
                     continue
                 abs_path, hdf5_path = parts
+                if is_derived_spectrum_path(hdf5_path):
+                    continue
                 parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
 
                 # Robustly coerce y to a 1D array
@@ -887,17 +914,17 @@ class RawPlotMixin:
                 line, = ax.plot(
                     x_use,
                     y_use,
-                    label=self.shorten_label(hdf5_path),
+                    label=getattr(self, "curve_display_names", {}).get(combined_label)
+                    or self.shorten_label(hdf5_path),
                     color=self._get_persistent_curve_color(combined_label),
                 )
                 line.dataset_key = combined_label
+                energy_axes.append(is_measurement_path(hdf5_path))
             except Exception:
                 # Skip problematic datasets but continue plotting the rest
                 continue
-        visible = [str(k).split("##", 1)[1] for k in getattr(self, "plot_data", {})
-                   if "##" in str(k) and self.raw_visibility.get(k, True)]
-        ax.set_xlabel("Photon energy (eV)" if visible and all(map(is_measurement_path, visible))
-                      else "Data index / photon energy (eV)" if any(map(is_measurement_path, visible))
+        ax.set_xlabel("Photon energy (eV)" if energy_axes and all(energy_axes)
+                      else "Data index / photon energy (eV)" if any(energy_axes)
                       else "Data index")
 
     def update_plot_raw(self):

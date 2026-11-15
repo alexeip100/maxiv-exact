@@ -152,6 +152,10 @@ class CorePlottingMixin:
         """
         import re
 
+        meta = getattr(self, "plotted_metadata", {}).get(key, {})
+        if "difference" in meta:
+            return getattr(self, "curve_display_names", {}).get(key) or meta["display_name"]
+
 # Synthetic summed curves ("__SUM__/...") do not have an entry number. / In "Entry number" mode we want their intrinsic display names (e.g. the
         try:
             h5 = str(key).split("##", 1)[1] if (key and "##" in str(key)) else str(key or "")
@@ -250,7 +254,11 @@ class CorePlottingMixin:
                 group_cond = False
 
             if getattr(self, "pass_button", None):
-                self.pass_button.setEnabled(bool(cond_sum or vc == 1 or group_cond))
+                differences = getattr(self, "_difference_sources", {})
+                snapshots_only = bool(differences and vc and all(
+                    key in differences for key in self._visible_processed_keys()
+                ))
+                self.pass_button.setEnabled(bool(cond_sum or vc == 1 or group_cond or snapshots_only))
         except Exception:
             pass
 
@@ -800,6 +808,7 @@ class CorePlottingMixin:
         self.region_states.clear()
         self.proc_region_states.clear()
         self.plot_data.clear()
+        self._clear_difference_snapshots()
         try:
             if hasattr(self, "_raw_key_sources"):
                 self._raw_key_sources.clear()
@@ -847,6 +856,7 @@ class CorePlottingMixin:
             for i in range(self.tree.topLevelItemCount()):
                 self.recursive_uncheck(self.tree.topLevelItem(i), 1)
         self.plot_data.clear()
+        self._clear_difference_snapshots()
         self.energy_cache.clear()
         self.cb_all_tey.setChecked(False)
         self.cb_all_pey.setChecked(False)

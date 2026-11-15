@@ -10,7 +10,7 @@ import logging
 import json
 import sys
 from . import hdf5_loading as h5load
-from .hdf5_curve_type import is_plottable_dtype
+from .hdf5_curve_type import is_derived_spectrum_path, is_plottable_dtype
 logger = logging.getLogger(__name__)
 from importlib.resources import files
 from PyQt6.QtWidgets import QApplication, QFileDialog, QTreeWidgetItem, QDialog, QMessageBox
@@ -337,13 +337,6 @@ class DataMixin:
 
         # Collect items as (key, region_start, region_end, label, unfinished_flag)
         items = []
-        def _is_sum_hdf5_path(hdf5_path: str) -> bool:
-            try:
-                p = str(hdf5_path).lstrip("/")
-                return p.startswith("__SUM__/")
-            except Exception:
-                return False
-
         for key, y_data in getattr(self, "plot_data", {}).items():
             try:
                 parts = str(key).split("##", 1)
@@ -369,7 +362,7 @@ class DataMixin:
                     except Exception:
                         # If override is malformed, fall back to computed behavior
                         pass
-                if not include_sums and _is_sum_hdf5_path(hdf5_path):
+                if not include_sums and is_derived_spectrum_path(hdf5_path):
                     continue
                 parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
                 entry_name = _extract_entry_name(hdf5_path)
@@ -384,7 +377,8 @@ class DataMixin:
 
                 # Measured energy axis (prefers pcap_energy_av)
                 try:
-                    x_data = lookup_energy(self, abs_path, parent, int(y_arr.size))
+                    x_data = lookup_energy(self, abs_path, parent, int(y_arr.size),
+                                           dataset_key=key if include_sums else None)
                 except Exception:
                     x_data = np.arange(int(y_arr.size), dtype=float)
                 if getattr(x_data, "size", 0) == 0:
@@ -633,6 +627,14 @@ class DataMixin:
     def update_file_label(self):
         self.file_label.setText("\n".join(self.hdf5_files.keys()) if self.hdf5_files else "No file open")
 
+    def _clear_difference_snapshots(self):
+        for key in getattr(self, "_difference_sources", {}):
+            self.curve_display_names.pop(key, None)
+            self._region_overrides.pop(key, None)
+            self._energy_shifts.pop(key, None)
+        if hasattr(self, "_difference_sources"):
+            self._difference_sources.clear()
+
     def close_file(self):
     # No persistent h5py.File handles are kept; just clear state
         self.hdf5_files.clear()
@@ -643,6 +645,7 @@ class DataMixin:
         self.file_label.setText("No file open")
         self.tree.clear()
         self.plot_data.clear()
+        self._clear_difference_snapshots()
         try:
             if hasattr(self, "_raw_key_sources"):
                 self._raw_key_sources.clear()
@@ -1009,7 +1012,7 @@ class DataMixin:
         for attr in (
             "plot_data", "raw_visibility", "_raw_key_sources", "curve_display_names",
             "_curve_color_map", "plotted_lines", "original_line_data", "custom_labels",
-            "plotted_metadata",
+            "plotted_metadata", "_energy_shifts",
         ):
             self._remap_path_prefix_dict_keys(attr, old_abs_path, new_abs_path)
 
@@ -1755,7 +1758,7 @@ class DataMixin:
                     continue
                 abs_path, hdf5_path = parts
                 parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
-                x_data = lookup_energy(self, abs_path, parent, len(y_data))
+                x_data = lookup_energy(self, abs_path, parent, len(y_data), dataset_key=combined_label)
                 if sum_y is None:
                     sum_y = y_data.copy()
                     x_ref = x_data
@@ -1773,13 +1776,22 @@ class DataMixin:
                     abs_path, hdf5_path = parts
                     parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
                     return (
-                        lookup_energy(self, abs_path, parent, len(y_data)),
+                        lookup_energy(self, abs_path, parent, len(y_data), dataset_key=combined_label),
                         y_data
                     )
         return None, None
 
 
-def lookup_energy(viewer, abs_path: str, parent: str, length: int, *, report=False):
+def lookup_energy(viewer, abs_path: str, parent: str, length: int, *, report=False, dataset_key=None):
+    """Resolve a spectrum's original energy grid and apply its current correction."""
+    energy, has_photon_energy = _lookup_original_energy(viewer, abs_path, parent, length)
+    shift = getattr(viewer, "_energy_shifts", {}).get(dataset_key, 0.0)
+    if has_photon_energy and shift:
+        energy = np.asarray(energy, dtype=float) + shift
+    return (energy, has_photon_energy) if report else energy
+
+
+def _lookup_original_energy(viewer, abs_path: str, parent: str, length: int):
     """
     Return the energy axis for a given 1D dataset.
 
@@ -1792,7 +1804,7 @@ def lookup_energy(viewer, abs_path: str, parent: str, length: int, *, report=Fal
        either under the same parent or at the file root.
     3) If none found, return a simple arange(length).
 
-    With report=True, return (energy, has_photon_energy). The cache marker
+    Return (energy, has_photon_energy). The cache marker
     is True for synthetic energy, False for HDF5 energy, or None for indices.
     """
     cache = getattr(viewer, "energy_cache", None)
@@ -1801,7 +1813,7 @@ def lookup_energy(viewer, abs_path: str, parent: str, length: int, *, report=Fal
     key = f"{abs_path}::{parent}"
     if key in cache:
         energy, source = cache[key]
-        return (energy, source is not None) if report else energy
+        return energy, source is not None
 
     x = None
     try:
@@ -1868,7 +1880,7 @@ def lookup_energy(viewer, abs_path: str, parent: str, length: int, *, report=Fal
     if not has_photon_energy:
         x = np.arange(length)
     cache[key] = (x, False if has_photon_energy else None)
-    return (x, has_photon_energy) if report else x
+    return x, has_photon_energy
 
 
 def collect_available_1d_datasets(self):
