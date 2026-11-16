@@ -138,10 +138,12 @@ This tree is for browsing the file contents and selecting specific datasets.
 Tree nodes are populated only when expanded. This keeps large files responsive.
 
 ### Browsing metadata
-Clicking on 0d data (like metadata strings or scalars) shows their values in a field under the plot on the Raw Data tab.
+Clicking scalar data shows its value or a text preview below the Raw Data plot. Double-click a text dataset to read or copy it in a read-only dialog.
+
+Expand **Attributes** beneath a file, group, or dataset to see the attribute names. Select an attribute to preview its value below the Raw Data plot, or double-click it to read the full value. Large arrays show a summary in the preview. For the literature library, double-click `documentation/disclaimer` to read the full disclaimer.
 
 ### Checking items
-Checking a supported 1D measurement dataset makes it available for the usual Raw Data and XAS processing workflows. Individually checked numeric or Boolean 1D datasets outside `measurement` can be plotted in **Raw Data** against data index, but are **not** sent to XAS-specific Processed Data operations.
+Checking a supported 1D measurement dataset makes it available for the usual Raw Data and XAS processing workflows. Individually checked numeric or Boolean 1D datasets outside `measurement` are available for inspection in **Raw Data**.
 
 ### Closing a single file
 Right-click a top-level file item → **Close** (with confirmation). Alternatively, select the HDF5 file to close and press “Delete”. 
@@ -166,6 +168,8 @@ All three tabs use the same basic plot/sidebar layout. The vertical divider is d
 ## Raw Data tab
 
 Raw Data shows measured spectra at their original photon energies. Applied energy corrections, sums, and differences are shown in **Processed Data**.
+
+To inspect a stored reference spectrum, open its HDF5 file and check the `y` dataset in **HDF5 Structure**. If its group contains a compatible one-dimensional `x` dataset, Raw Data uses those stored X values automatically. The curve list shows the stored title or the group path, with a file and group identifier added when titles match. The axis shows **Photon energy (eV)** for EXACT reference-library records or when the X units are marked as eV. A standalone dataset or an incompatible pair uses **Data index**.
 Purpose: select and inspect raw curves.
 
 ### Channel family selectors
@@ -534,4 +538,4 @@ The **FY Analysis** menu is in **Processed Data**. It contains **FL Map Analysis
 
 ## Generic 1D datasets outside measurement
 
-In **HDF5 Structure**, individually checking a supported numeric or Boolean 1D dataset outside `measurement` plots it in **Raw Data** against **data index** (0, 1, 2, …). This is useful for instrument metadata and diagnostic arrays. These datasets are *view-only* and are not interpreted as XAS spectra or sent through XAS-specific Processed Data operations. Normal measurement channels retain their existing photon-energy axes. Bulk channel-family selection remains focused on normal measurement channels, so it does not automatically select thousands of metadata items. Non-numeric, scalar, and multidimensional datasets are not treated as ordinary 1D curves.
+In **HDF5 Structure**, individually checking a supported numeric or Boolean 1D dataset outside `measurement` plots it in **Raw Data** against **data index** (0, 1, 2, …) by default. A compatible `y` dataset uses its sibling `x` values. These datasets are *view-only* and are not sent through XAS-specific Processed Data operations. Normal measurement channels retain their existing photon-energy axes. Bulk channel-family selection remains focused on normal measurement channels, so it does not automatically select thousands of metadata items. Non-numeric, scalar, and multidimensional datasets are not treated as ordinary 1D curves.

@@ -700,6 +700,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         self.tree.itemExpanded.connect(self.load_subtree)
         self.tree.itemChanged.connect(self.toggle_plot)
         self.tree.itemClicked.connect(self.display_data)
+        self.tree.itemDoubleClicked.connect(self.open_hdf5_tree_text)
         self.tree.currentItemChanged.connect(self._on_tree_current_item_changed)
         # Enable context menu on the HDF5 tree for per-file closing
         self.tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)

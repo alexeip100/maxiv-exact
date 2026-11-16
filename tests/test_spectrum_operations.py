@@ -1,4 +1,6 @@
 from unittest.mock import patch
+from hashlib import sha256
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -237,3 +239,81 @@ def test_group_bg_series_and_i0_difference_use_actual_plot_and_snapshot(viewer, 
     assert key not in viewer.plot_data
     assert key not in viewer._difference_sources
     assert all(source in viewer.plot_data for source in keys)
+
+
+def test_raw_library_drop_and_select_y(viewer):
+    from PyQt6.QtCore import QMimeData, QPointF, Qt, QUrl
+    from PyQt6.QtGui import QDropEvent
+    from PyQt6.QtTest import QTest
+    from PyQt6.QtWidgets import QMessageBox, QTreeWidgetItemIterator
+
+    path = Path(viewer._get_library_path())
+    if not path.is_file():
+        pytest.skip("Reference library is unavailable in this checkout.")
+    before = sha256(path.read_bytes()).digest()
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(path))])
+    event = QDropEvent(QPointF(), Qt.DropAction.CopyAction, mime,
+                       Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
+    with patch.object(QMessageBox, "critical", side_effect=AssertionError("HDF5 drop failed")):
+        assert viewer.eventFilter(viewer.canvas_raw, event)
+        assert event.isAccepted()
+        for _ in range(300):
+            if viewer.tree.topLevelItemCount():
+                break
+            QTest.qWait(100)
+
+    root = viewer.tree.topLevelItem(0)
+    assert root is not None and root.text(0) == path.name
+    spectra = root.child(0)
+    assert spectra.text(0) == "spectra"
+    spectra.setExpanded(True)
+    for i, identifier in enumerate(("000001", "000002")):
+        entry = spectra.child(i)
+        assert entry.text(0) == identifier
+        entry.setExpanded(True)
+        assert entry.child(0).text(0) == "x"
+        y_item = entry.child(1)
+        assert y_item.text(0) == "y"
+        y_item.setCheckState(0, Qt.CheckState.Checked)
+        assert entry.child(0).checkState(0) == Qt.CheckState.Unchecked
+    assert viewer.raw_ax.get_xlabel() == "Photon energy (eV)"
+    assert len(viewer.raw_ax.lines) == 2
+    names = {}
+    rows = QTreeWidgetItemIterator(viewer.raw_tree)
+    while rows.value():
+        item = rows.value()
+        names[item.data(0, Qt.ItemDataRole.UserRole)] = item.text(0)
+        rows += 1
+    with h5py.File(path, "r") as file:
+        for line in viewer.raw_ax.lines:
+            y_path = line.dataset_key.split("##", 1)[1]
+            np.testing.assert_array_equal(line.get_xdata(), file[y_path].parent["x"][:])
+            np.testing.assert_array_equal(line.get_ydata(), file[y_path][:])
+            assert line.get_label() == file[y_path].parent.attrs["label"]
+            assert names[line.dataset_key] == line.get_label()
+    spectra.child(0).child(1).setCheckState(0, Qt.CheckState.Unchecked)
+    assert len(viewer.raw_ax.lines) == 1
+    assert viewer.raw_ax.lines[0].dataset_key.endswith("/000002/y")
+    assert sha256(path.read_bytes()).digest() == before
+
+
+def test_raw_pair_names_disambiguate_duplicate_titles(viewer, tmp_path):
+    path = str(tmp_path / "pairs.h5")
+    with h5py.File(path, "w") as file:
+        for name in ("a", "b", "c"):
+            file[f"{name}/x"] = [10, 20]
+            file[f"{name}/y"] = [1, 2]
+            if name != "c":
+                file[name].attrs["title"] = "Reference"
+    for name in ("a", "b", "c"):
+        key = f"{path}##{name}/y"
+        viewer.plot_data[key] = np.array([1, 2])
+        viewer.raw_visibility[key] = name != "b"
+    viewer.update_plot_raw()
+    assert viewer._raw_pair_names == {
+        f"{path}##a/y": "Reference (pairs.h5:/a)",
+        f"{path}##b/y": "Reference (pairs.h5:/b)",
+        f"{path}##c/y": "/c",
+    }
+    assert [line.get_label() for line in viewer.raw_ax.lines] == ["Reference (pairs.h5:/a)", "/c"]

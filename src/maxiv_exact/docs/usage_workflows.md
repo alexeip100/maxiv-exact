@@ -95,7 +95,7 @@ For a quick global visibility change, use **Check all / Uncheck all** below the 
 
 1. Open an HDF5 file and expand its hierarchy in **HDF5 Structure** only as far as necessary.
 2. Check an individual **numeric or Boolean 1D** dataset, even when it is not under `measurement`. For example, `Scan_5270/Metadata/I0 instant current/READ/value` may contain two measured values.
-3. In **Raw Data**, these generic curves are plotted against their **data index**. Do not interpret that index as photon energy or assume that two values mean the beginning and end of a scan unless their acquisition metadata establishes it.
+3. In **Raw Data**, standalone curves are plotted against their **data index**. For a compatible X–Y pair, check `y` to plot it against the stored `x` dataset.
 4. These generic arrays are **for inspection**, not for XAS-specific Processed Data calculations. For normal XAS measurement channels, use the standard family/channel selectors and photon-energy workflow instead.
 
 

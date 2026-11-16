@@ -5,6 +5,7 @@ enter the XAS processing workflow.  This module has no Qt dependency.
 """
 from __future__ import annotations
 
+import h5py
 import numpy as np
 
 
@@ -35,3 +36,41 @@ def raw_curve_axis(path: str, length: int, energy_lookup):
     if not is_measurement_path(path):
         return np.arange(length, dtype=float)
     return np.asarray(energy_lookup(), dtype=float)
+
+
+def _attribute_text(value):
+    if isinstance(value, bytes):
+        value = value.decode(errors="replace")
+    return value.strip() if isinstance(value, str) else ""
+
+
+def paired_raw_axis(file, y_path: str, length: int):
+    """Return the stored sibling x, axis label, and stored spectrum title."""
+    parent, _, name = y_path.strip("/").rpartition("/")
+    if name != "y":
+        return None
+    group = file[parent] if parent else file
+    x = group.get("x")
+    y = group.get("y")
+    if not all(isinstance(ds, h5py.Dataset) and ds.shape == (length,)
+               and ds.dtype.kind in "iuf" for ds in (x, y)):
+        return None
+    values = x[()]
+    if not length or not np.isfinite(values).all():
+        return None
+
+    units = _attribute_text(x.attrs.get("units", x.attrs.get("unit", group.attrs.get("x_units", ""))))
+    # The existing reference-library format stores photon-energy axes in eV.
+    library_record = (
+        parent.startswith("spectra/") and parent.count("/") == 1
+        and _attribute_text(file.attrs.get("library_version")) == "1.0"
+        and _attribute_text(file.attrs.get("created_with")) in {"maxiv_exact", "flexpes_nexafs"}
+    )
+    if units.casefold() == "ev" or (not units and library_record):
+        label = "Photon energy (eV)"
+    else:
+        label = f"X ({units})" if units else "X"
+    title = next((text for attrs in (group.attrs, y.attrs)
+                  for field in ("label", "title", "name")
+                  if (text := _attribute_text(attrs.get(field)))), "")
+    return values, label, title or group.name

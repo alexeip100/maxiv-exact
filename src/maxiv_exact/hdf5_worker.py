@@ -15,6 +15,8 @@ os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
 import h5py
 
+from .hdf5_metadata import describe_tree_object
+
 
 def _emit(payload):
     sys.stdout.write(json.dumps(payload, ensure_ascii=False) + "\n")
@@ -46,26 +48,12 @@ def scan_file(abs_path):
     norm_channels = []
     all_channels = set()
     with _open_h5_read(abs_path) as f:
+        root_has_attributes = bool(len(f.attrs))
         for name in f.keys():
-            obj = f[name]
-            kind = "other"
-            has_children = False
-            is_1d_dataset = False
-            if isinstance(obj, h5py.Group):
-                kind = "group"
-                try:
-                    has_children = bool(len(obj.keys()))
-                except Exception:
-                    has_children = False
-            elif isinstance(obj, h5py.Dataset):
-                kind = "dataset"
-                is_1d_dataset = (obj.ndim == 1)
             root_children.append({
                 "name": str(name),
                 "path": str(name),
-                "kind": kind,
-                "has_children": bool(has_children),
-                "is_1d_dataset": bool(is_1d_dataset),
+                **describe_tree_object(f[name]),
             })
 
         for key in f.keys():
@@ -103,6 +91,7 @@ def scan_file(abs_path):
     return {
         "abs_path": abs_path,
         "root_children": root_children,
+        "root_has_attributes": root_has_attributes,
         "norm_channels": norm_channels,
         "all_channels": sorted(all_channels, key=str.lower),
     }

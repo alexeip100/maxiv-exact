@@ -10,12 +10,19 @@ import logging
 import json
 import sys
 from . import hdf5_loading as h5load
-from .hdf5_curve_type import is_derived_spectrum_path, is_plottable_dtype
+from .hdf5_curve_type import is_derived_spectrum_path
+from .hdf5_metadata import (attribute_preview, compact_text,
+                            describe_tree_object, format_hdf5_value)
 logger = logging.getLogger(__name__)
 from importlib.resources import files
-from PyQt6.QtWidgets import QApplication, QFileDialog, QTreeWidgetItem, QDialog, QMessageBox
+from PyQt6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDialog,
+                             QMessageBox, QPlainTextEdit, QTreeWidgetItem, QVBoxLayout)
 from PyQt6.QtCore import Qt, QTimer, QProcess
 
+
+
+_ATTRIBUTE_ROLE = Qt.ItemDataRole.UserRole + 1
+_TEXT_DATASET_ROLE = Qt.ItemDataRole.UserRole + 2
 
 
 class DataMixin:
@@ -1102,84 +1109,103 @@ class DataMixin:
         except Exception:
             pass
 
-    def _make_hdf5_tree_child(self, abs_path, hdf5_path, display_name, h5_obj):
-        """Create a tree item for an HDF5 group/dataset, preserving lazy loading."""
-        child_item = QTreeWidgetItem([str(display_name)])
-        child_item.setData(0, Qt.ItemDataRole.UserRole, h5load.make_tree_payload(abs_path, hdf5_path))
-        try:
-            if isinstance(h5_obj, h5py.Group) and h5_obj.keys():
-                child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
-                child_item.addChild(QTreeWidgetItem(["(click to expand)"]))
-            elif isinstance(h5_obj, h5py.Dataset) and h5_obj.ndim == 1 and is_plottable_dtype(h5_obj.dtype):
-                key = f"{abs_path}##{hdf5_path}"
-                state = Qt.CheckState.Checked if getattr(self, "raw_visibility", {}).get(key, False) else Qt.CheckState.Unchecked
-                child_item.setCheckState(0, state)
-        except Exception:
-            pass
-        return child_item
+    def _make_hdf5_tree_child(self, abs_path, hdf5_path, display_name, description):
+        """Create a real HDF5 item from a worker or lazy-lookup description."""
+        item = QTreeWidgetItem([str(display_name)])
+        item.setData(0, Qt.ItemDataRole.UserRole, h5load.make_tree_payload(abs_path, hdf5_path))
+        if description.get("has_children"):
+            item.addChild(QTreeWidgetItem(["(click to expand)"]))
+        if description.get("is_1d_dataset"):
+            key = f"{abs_path}##{hdf5_path}"
+            state = Qt.CheckState.Checked if getattr(self, "raw_visibility", {}).get(key) else Qt.CheckState.Unchecked
+            item.setCheckState(0, state)
+        if description.get("is_text_dataset"):
+            item.setData(0, _TEXT_DATASET_ROLE, True)
+            item.setToolTip(0, "Double-click to read the complete text.")
+        self._sync_attributes_node(item, description.get("has_attributes", False))
+        return item
 
     def _tree_item_has_dummy_child(self, item) -> bool:
-        try:
-            return item.childCount() == 1 and item.child(0).text(0) == "(click to expand)" and not item.child(0).data(0, Qt.ItemDataRole.UserRole)
-        except Exception:
-            return False
+        child = item.child(0)
+        return (child is not None and child.text(0) == "(click to expand)"
+                and child.data(0, Qt.ItemDataRole.UserRole) is None)
+
+    def _attributes_node(self, item):
+        last = item.child(item.childCount() - 1) if item.childCount() else None
+        if last is not None and last.data(0, _ATTRIBUTE_ROLE) is True:
+            return last
+        return None
+
+    def _sync_attributes_node(self, item, has_attributes):
+        branch = self._attributes_node(item)
+        if not has_attributes:
+            if branch is not None:
+                item.removeChild(branch)
+            return None
+        if branch is None:
+            branch = QTreeWidgetItem(["Attributes"])
+            # Synthetic rows intentionally have no HDF5/plotting payload.
+            branch.setData(0, _ATTRIBUTE_ROLE, True)
+            branch.setFlags(branch.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+            font = branch.font(0)
+            font.setItalic(True)
+            branch.setFont(0, font)
+            branch.setToolTip(0, "Expand to inspect stored metadata.")
+            branch.addChild(QTreeWidgetItem(["(click to expand)"]))
+            item.addChild(branch)
+        return branch
+
+    def _populate_attributes(self, branch, attributes):
+        branch.takeChildren()
+        rows = []
+        for name in attributes:
+            row = QTreeWidgetItem([name])
+            row.setData(0, _ATTRIBUTE_ROLE, name)
+            row.setFlags(row.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+            row.setToolTip(0, "Select to preview below the plot. Double-click to read the complete value.")
+            rows.append(row)
+        branch.addChildren(rows)
+
+    def _insert_hdf5_tree_child(self, parent, child):
+        index = parent.childCount() - int(self._attributes_node(parent) is not None)
+        parent.insertChild(index, child)
 
     def _refresh_loaded_hdf5_tree_branch(self, h5_file, item, abs_path, hdf5_path: str) -> None:
-        """Add missing HDF5 children to already-loaded tree branches.
-
-        Existing items, check states, and expanded branches are preserved.  Unexpanded
-        lazy branches keep their dummy child; they will load from the refreshed file
-        when the user expands them.
-        """
-        try:
-            if hdf5_path:
-                if hdf5_path not in h5_file:
-                    return
-                obj = h5_file[hdf5_path]
-            else:
-                obj = h5_file
-            if not isinstance(obj, (h5py.File, h5py.Group)):
-                return
-        except Exception:
+        """Refresh visible metadata and add missing children without changing selections."""
+        obj = h5_file.get(hdf5_path) if hdf5_path else h5_file
+        if obj is None:
             return
-
-        # If a non-root branch is still lazy, leave it lazy. Root/file items are
-        # refreshed immediately so newly appended entries become visible at once.
-        try:
-            if hdf5_path and self._tree_item_has_dummy_child(item):
+        branch = self._sync_attributes_node(item, bool(len(obj.attrs)))
+        if branch is not None and not self._tree_item_has_dummy_child(branch):
+            branch.takeChildren()
+            if branch.isExpanded():
+                self._populate_attributes(branch, obj.attrs)
+            else:
+                branch.addChild(QTreeWidgetItem(["(click to expand)"]))
+        if not isinstance(obj, h5py.Group):
+            return
+        if self._tree_item_has_dummy_child(item):
+            if hdf5_path:
                 return
-            if self._tree_item_has_dummy_child(item):
-                item.removeChild(item.child(0))
-        except Exception:
-            pass
+            item.takeChild(0)
 
         existing = {}
-        try:
-            for i in range(item.childCount()):
-                ch = item.child(i)
-                payload = h5load.split_tree_payload(
-                    ch.data(0, Qt.ItemDataRole.UserRole),
-                    known_file_paths=getattr(self, "hdf5_files", {}) or {},
-                )
-                if payload is not None:
-                    existing[payload[1]] = ch
-        except Exception:
-            existing = {}
-
-        try:
-            for name in obj.keys():
-                child_path = f"{hdf5_path}/{name}" if hdf5_path else str(name)
-                if child_path not in existing:
-                    try:
-                        item.addChild(self._make_hdf5_tree_child(abs_path, child_path, name, obj[name]))
-                    except Exception:
-                        pass
+        for i in range(item.childCount()):
+            child = item.child(i)
+            payload = h5load.split_tree_payload(child.data(0, Qt.ItemDataRole.UserRole))
+            if payload is not None:
+                existing[payload[1]] = child
+        for name in obj:
+            child_path = f"{hdf5_path}/{name}" if hdf5_path else name
+            try:
+                if child_path in existing:
+                    self._refresh_loaded_hdf5_tree_branch(h5_file, existing[child_path], abs_path, child_path)
                 else:
-                    child_item = existing.get(child_path)
-                    if child_item is not None and child_item.childCount() > 0 and not self._tree_item_has_dummy_child(child_item):
-                        self._refresh_loaded_hdf5_tree_branch(h5_file, child_item, abs_path, child_path)
-        except Exception:
-            pass
+                    description = describe_tree_object(obj[name])
+                    self._insert_hdf5_tree_child(item, self._make_hdf5_tree_child(
+                        abs_path, child_path, name, description))
+            except (OSError, TypeError, ValueError, KeyError):
+                logger.debug("Could not refresh HDF5 tree item %s", child_path, exc_info=True)
 
     def refresh_hdf5_file(self, existing_abs_path, new_abs_path):
         """Refresh an already loaded same-named HDF5 file in place.
@@ -1193,8 +1219,8 @@ class DataMixin:
 
         # Validate readability before changing application state.
         try:
-            with self._open_h5_read(new_abs_path) as f:
-                has_children = len(f.keys()) > 0
+            with self._open_h5_read(new_abs_path):
+                pass
         except Exception as exc:
             raise RuntimeError(f"Could not refresh HDF5 file:\n{new_abs_path}\n\n{exc}") from exc
 
@@ -1216,10 +1242,8 @@ class DataMixin:
 
             item.setText(0, os.path.basename(new_abs_path))
             item.setData(0, Qt.ItemDataRole.UserRole, h5load.make_tree_payload(new_abs_path, ""))
-            if has_children:
-                item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
-                with self._open_h5_read(new_abs_path) as f:
-                    self._refresh_loaded_hdf5_tree_branch(f, item, new_abs_path, "")
+            with self._open_h5_read(new_abs_path) as f:
+                self._refresh_loaded_hdf5_tree_branch(f, item, new_abs_path, "")
             item.setExpanded(True)
         finally:
             try:
@@ -1407,16 +1431,8 @@ class DataMixin:
             for desc in payload.get("root_children", []) or []:
                 name = str(desc.get("name", ""))
                 hdf5_path = str(desc.get("path", name))
-                child_item = QTreeWidgetItem([name])
-                child_item.setData(0, Qt.ItemDataRole.UserRole, h5load.make_tree_payload(abs_path, hdf5_path))
-                if desc.get("kind") == "group" and desc.get("has_children"):
-                    child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
-                    child_item.addChild(QTreeWidgetItem(["(click to expand)"]))
-                elif desc.get("kind") == "dataset" and desc.get("is_1d_dataset"):
-                    key = f"{abs_path}##{hdf5_path}"
-                    state = Qt.CheckState.Checked if getattr(self, "raw_visibility", {}).get(key, False) else Qt.CheckState.Unchecked
-                    child_item.setCheckState(0, state)
-                file_item.addChild(child_item)
+                file_item.addChild(self._make_hdf5_tree_child(abs_path, hdf5_path, name, desc))
+            self._sync_attributes_node(file_item, payload.get("root_has_attributes", False))
 
             self.tree.addTopLevelItem(file_item)
             file_item.setExpanded(True)
@@ -1608,7 +1624,7 @@ class DataMixin:
             # Validate readability before modifying application state.
             try:
                 with self._open_h5_read(abs_path) as f:
-                    has_children = len(f.keys()) > 0
+                    root_description = describe_tree_object(f)
             except Exception as exc:
                 raise RuntimeError(f"Could not open HDF5 file:\n{abs_path}\n\n{exc}") from exc
 
@@ -1622,10 +1638,10 @@ class DataMixin:
                 file_item = QTreeWidgetItem([os.path.basename(abs_path)])
                 file_item.setData(0, Qt.ItemDataRole.UserRole, h5load.make_tree_payload(abs_path, ""))
 
-                if has_children:
-                    file_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
+                if root_description["has_children"]:
                     file_item.addChild(QTreeWidgetItem(["(click to expand)"]))
 
+                self._sync_attributes_node(file_item, root_description["has_attributes"])
                 self.tree.addTopLevelItem(file_item)
                 file_item.setExpanded(True)
             finally:
@@ -1637,7 +1653,7 @@ class DataMixin:
 
             # If signals were blocked during insertion, populate the first level explicitly.
             try:
-                if has_children:
+                if root_description["has_children"]:
                     self.load_subtree(file_item)
             except Exception:
                 pass
@@ -1703,47 +1719,88 @@ class DataMixin:
                     self.combo_norm.setCurrentIndex(i)
                     return
     def load_subtree(self, item):
-        payload = h5load.split_tree_payload(
-            item.data(0, Qt.ItemDataRole.UserRole),
-            known_file_paths=getattr(self, "hdf5_files", {}) or {},
-        )
+        if not self._tree_item_has_dummy_child(item):
+            return
+        is_attributes = item.data(0, _ATTRIBUTE_ROLE) is True
+        owner = item.parent() if is_attributes else item
+        payload = h5load.split_tree_payload(owner.data(0, Qt.ItemDataRole.UserRole))
         if payload is None:
             return
         abs_path, hdf5_path = payload
         try:
-            with (self._open_h5_read(abs_path)) as f:
-                if hdf5_path == "":
-                    if item.childCount() == 1 and item.child(0).text(0) == "(click to expand)":
-                        item.removeChild(item.child(0))
-                        for key in f.keys():
-                            child_item = QTreeWidgetItem([key])
-                            child_item.setData(0, Qt.ItemDataRole.UserRole, h5load.make_tree_payload(abs_path, key))
-                            sub_obj = f[key]
-                            if isinstance(sub_obj, h5py.Group) and sub_obj.keys():
-                                child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
-                                child_item.addChild(QTreeWidgetItem(["(click to expand)"]))
-                            elif isinstance(sub_obj, h5py.Dataset) and sub_obj.ndim == 1:
-                                child_item.setCheckState(0, Qt.CheckState.Unchecked)
-                            item.addChild(child_item)
-                    return
+            with self._open_h5_read(abs_path) as f:
+                obj = f[hdf5_path] if hdf5_path else f
+                if is_attributes:
+                    self._populate_attributes(item, obj.attrs)
+                elif isinstance(obj, h5py.Group):
+                    item.takeChild(0)
+                    for name in obj:
+                        child_path = f"{hdf5_path}/{name}" if hdf5_path else name
+                        child = self._make_hdf5_tree_child(
+                            abs_path, child_path, name, describe_tree_object(obj.get(name)))
+                        self._insert_hdf5_tree_child(item, child)
+        except (OSError, TypeError, ValueError, KeyError):
+            logger.debug("Could not expand HDF5 tree item %s", hdf5_path, exc_info=True)
 
-                if hdf5_path in f:
-                    obj = f[hdf5_path]
-                    if isinstance(obj, h5py.Group):
-                        if item.childCount() == 1 and item.child(0).text(0) == "(click to expand)":
-                            item.removeChild(item.child(0))
-                            for key in obj.keys():
-                                child_item = QTreeWidgetItem([key])
-                                child_item.setData(0, Qt.ItemDataRole.UserRole, h5load.make_tree_payload(abs_path, f"{hdf5_path}/{key}"))
-                                sub_obj = obj[key]
-                                if isinstance(sub_obj, h5py.Group) and sub_obj.keys():
-                                    child_item.setChildIndicatorPolicy(QTreeWidgetItem.ChildIndicatorPolicy.ShowIndicator)
-                                    child_item.addChild(QTreeWidgetItem(["(click to expand)"]))
-                                elif isinstance(sub_obj, h5py.Dataset) and sub_obj.ndim == 1:
-                                    child_item.setCheckState(0, Qt.CheckState.Unchecked)
-                                item.addChild(child_item)
-        except Exception:
-            pass
+    def preview_hdf5_attribute(self, item):
+        """Show the selected attribute in the Raw Data scalar preview."""
+        if not isinstance(item.data(0, _ATTRIBUTE_ROLE), str):
+            return False
+        try:
+            content = self._read_hdf5_tree_text(item, preview=True)
+            if content is not None:
+                self.scalar_display_raw.setText(compact_text(content[1]))
+        except (OSError, TypeError, ValueError, KeyError) as exc:
+            self.scalar_display_raw.setText(f"Could not read attribute: {exc}")
+        return True
+
+    def _read_hdf5_tree_text(self, item, *, preview=False):
+        attribute = item.data(0, _ATTRIBUTE_ROLE)
+        is_attribute = isinstance(attribute, str)
+        if is_attribute:
+            owner = item.parent().parent()
+        elif item.data(0, _TEXT_DATASET_ROLE):
+            owner = item
+        else:
+            return None
+        payload = h5load.split_tree_payload(owner.data(0, Qt.ItemDataRole.UserRole))
+        if payload is None:
+            return None
+        abs_path, hdf5_path = payload
+        with self._open_h5_read(abs_path) as file:
+            obj = file[hdf5_path] if hdf5_path else file
+            if is_attribute:
+                title = f"{hdf5_path or '/'} · {attribute}"
+                if preview:
+                    return title, attribute_preview(obj.attrs, attribute)
+                return title, format_hdf5_value(obj.attrs[attribute])
+            return hdf5_path, format_hdf5_value(obj[()])
+
+    def open_hdf5_tree_text(self, item, column):
+        """Double-click action for attributes and HDF5 string datasets."""
+        if column != 0:
+            return
+        try:
+            content = self._read_hdf5_tree_text(item)
+        except (OSError, TypeError, ValueError, KeyError) as exc:
+            QMessageBox.warning(self, "Could not read HDF5 text", str(exc))
+            return
+        if content is not None:
+            self._show_hdf5_text(*content)
+
+    def _show_hdf5_text(self, title, text):
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        dialog.resize(700, 480)
+        layout = QVBoxLayout(dialog)
+        viewer = QPlainTextEdit(dialog)
+        viewer.setReadOnly(True)
+        viewer.setPlainText(text)
+        layout.addWidget(viewer)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=dialog)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        dialog.exec()
 
     def _compute_raw_curve(self):
         if not self.plot_data:

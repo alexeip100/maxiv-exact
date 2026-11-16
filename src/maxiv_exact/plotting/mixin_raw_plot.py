@@ -11,7 +11,9 @@ The code is moved with minimal changes to preserve behaviour.
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import datetime
+from pathlib import Path
 
 import h5py
 import numpy as np
@@ -22,7 +24,7 @@ from PyQt6.QtWidgets import QListWidgetItem, QMessageBox
 from ..data import lookup_energy
 from ..hdf5_curve_type import (
     is_derived_spectrum_path, is_measurement_path, is_processed_xas_path,
-    is_plottable_dtype, raw_curve_axis,
+    is_plottable_dtype, paired_raw_axis, raw_curve_axis,
 )
 from .. import processing
 
@@ -796,11 +798,14 @@ class RawPlotMixin:
             pass
 
     def display_data(self, item, column):
+        from ..hdf5_metadata import compact_text
         # Update scalar/text display for the *current* tree item (mouse or keyboard),
         # and expand groups instead of trying to display them.
         if self.data_tabs.currentIndex() != 0:
             return
         if item is None:
+            return
+        if self.preview_hdf5_attribute(item):
             return
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if not data:
@@ -817,7 +822,7 @@ class RawPlotMixin:
                 try:
                     item.setExpanded(True)
                     # Populate children immediately for keyboard navigation.
-                    if item.childCount() == 1 and item.child(0).text(0) == "(click to expand)":
+                    if self._tree_item_has_dummy_child(item):
                         self.load_subtree(item)
                 except Exception:
                     pass
@@ -834,7 +839,7 @@ class RawPlotMixin:
                 if isinstance(obj, h5py.Group):
                     try:
                         item.setExpanded(True)
-                        if item.childCount() == 1 and item.child(0).text(0) == "(click to expand)":
+                        if self._tree_item_has_dummy_child(item):
                             self.load_subtree(item)
                     except Exception:
                         pass
@@ -844,7 +849,9 @@ class RawPlotMixin:
                         pass
                     return
 
-                # Dataset
+                # One-dimensional data are handled by the checkbox or text viewer.
+                if obj.ndim == 1:
+                    return
                 arr = obj[()]
 
             # Scalars and 1D
@@ -856,7 +863,7 @@ class RawPlotMixin:
 
             # Bytes → str
             if isinstance(arr, bytes):
-                arr = arr.decode("utf-8")
+                arr = arr.decode("utf-8", errors="replace")
 
             # Try datetime formatting if string looks like ISO-ish
             if isinstance(arr, str) and "T" in arr and "-" in arr:
@@ -866,6 +873,8 @@ class RawPlotMixin:
                 except ValueError:
                     pass
 
+            if isinstance(arr, str):
+                arr = compact_text(arr)
             self.scalar_display_raw.setText(str(arr) if not isinstance(arr, float) else f"{arr:.2f}")
 
         except Exception as e:
@@ -874,17 +883,19 @@ class RawPlotMixin:
     # ------------ Raw plotting ------------
     def plot_curves(self, ax):
         ax.clear()
-        energy_axes = []
+        axis_labels = []
+        pair_names = {}
         for combined_label, y_data in list(getattr(self, "plot_data", {}).items()):
             try:
-                if not self.raw_visibility.get(combined_label, True):
-                    continue
-
                 parts = str(combined_label).split("##", 1)
                 if len(parts) != 2:
                     continue
                 abs_path, hdf5_path = parts
                 if is_derived_spectrum_path(hdf5_path):
+                    continue
+                visible = self.raw_visibility.get(combined_label, True)
+                paired_candidate = not is_measurement_path(hdf5_path) and hdf5_path.rsplit("/", 1)[-1] == "y"
+                if not (visible or paired_candidate):
                     continue
                 parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
 
@@ -898,6 +909,17 @@ class RawPlotMixin:
                     hdf5_path, int(y_arr.size),
                     lambda: lookup_energy(self, abs_path, parent, int(y_arr.size)),
                 )
+                axis_label = "Photon energy (eV)" if is_measurement_path(hdf5_path) else "Data index"
+                if paired_candidate:
+                    try:
+                        with self._open_h5_read(abs_path) as file:
+                            pair = paired_raw_axis(file, hdf5_path, y_arr.size)
+                        if pair is not None:
+                            x_data, axis_label, pair_names[combined_label] = pair
+                    except (OSError, KeyError, RuntimeError):
+                        pass
+                if not visible:
+                    continue
                 x_arr = np.asarray(x_data)
                 if x_arr.ndim != 1 or x_arr.size == 0:
                     continue
@@ -919,13 +941,29 @@ class RawPlotMixin:
                     color=self._get_persistent_curve_color(combined_label),
                 )
                 line.dataset_key = combined_label
-                energy_axes.append(is_measurement_path(hdf5_path))
+                axis_labels.append(axis_label)
             except Exception:
                 # Skip problematic datasets but continue plotting the rest
                 continue
-        ax.set_xlabel("Photon energy (eV)" if energy_axes and all(energy_axes)
-                      else "Data index / photon energy (eV)" if any(energy_axes)
-                      else "Data index")
+        counts = Counter(pair_names.values())
+        for key, name in pair_names.items():
+            if counts[name] > 1 or name == "/":
+                source, path = key.split("##", 1)
+                group = path.rpartition("/")[0].strip("/")
+                location = f"{Path(source).name}:/{group}"
+                pair_names[key] = f"{name} ({location})" if name != "/" else location
+        counts = Counter(pair_names.values())
+        for key, name in pair_names.items():
+            if counts[name] > 1:
+                pair_names[key] = f"{name} ({key.replace('##', ':/', 1)})"
+        self._raw_pair_names = pair_names
+        for line in ax.lines:
+            if line.dataset_key in pair_names:
+                line.set_label(pair_names[line.dataset_key])
+        labels = list(dict.fromkeys(axis_labels))
+        if set(labels) == {"Photon energy (eV)", "Data index"}:
+            labels = ["Data index", "photon energy (eV)"]
+        ax.set_xlabel(" / ".join(labels) if labels else "Data index")
 
     def update_plot_raw(self):
         try:
