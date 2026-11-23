@@ -8,26 +8,16 @@ Starting with the **2.5 series**, the same software continues under the **EXACT*
 
 ## Main capabilities
 
-- Load and inspect X-ray absorption data stored in HDF5 files.
-- Explore fluorescence detector maps, inspect emission spectra, compare fluorescence-energy ROIs and extract excitation spectra.
-- Fit fluorescence emission peaks across a scan; view fitted, residual and component maps, and send measured ROI or fitted-component spectra to Processed Data.
-- Plot individual numerical 1D datasets outside measurement groups in Raw Data, using a data-index axis.
-- Drag-and-drop HDF5 loading from the file tree or any main plotting area.
-- Work with the common detector channels used in FlexPES XAS/NEXAFS measurements, including **TEY**, **PEY**, **TFY**, **PFY**, and the corresponding **I₀** signal.
-- Use built-in or user-edited **channel profiles** to map HDF5 dataset names to the physical detector roles.
-- Browse raw curves, load detector groups, and send selected spectra to the processing workflow.
-- Apply common XAS/NEXAFS pre-processing steps such as normalization, background handling, averaging/summation, and grouped background alignment.
-- Fit Group BG-processed NEXAFS series with Gaussian resonances and IP steps, compare fitted trends, and save or export the results.
-- Compare spectra visually in overlay or waterfall-style presentations.
-- Explore bundled **X-ray reference data** from Henke/CXRO and Chantler/XrayDB, including atomic scattering factors and mass attenuation coefficients.
-- Enter one or several **chemical formulas** to calculate and compare Chantler-based compound mass attenuation coefficients.
-- Build and reuse a **reference spectrum library**.
-- Perform decomposition analysis with **PCA**, **NMF**, and **MCR-ALS** tools.
-- Export processed spectra and decomposition results for further analysis.
-- Persistent **System / Light / Dark** application themes and adjustable UI font size, with font-aware interface sizing.
-- Fast **Check all / Uncheck all** controls for the curve lists in Raw, Processed, and Plotted Data.
+- **Inspect XAS and NEXAFS data.** Browse HDF5 scans, detector signals, and acquisition metadata. Use configurable channel profiles to identify photon energy, incident intensity (I₀), and detector signals such as TEY, PEY, TFY, and PFY.
+- **Process and compare spectra.** Normalize by I₀, subtract backgrounds, apply consistent processing across a series, and combine repeat scans. Correct photon energies for individual spectra or subtract a scaled reference from one spectrum or a series.
+- **Analyze fluorescence detector maps.** Inspect emission spectra, select emission regions to extract excitation spectra, or fit emission peaks across a scan. Review fitted, residual, and component maps, then send the extracted spectra to Processed Data.
+- **Fit NEXAFS series and follow trends.** Fit Gaussian resonances and ionization steps across consistently processed spectra. Compare fitted parameters and peak area ratios, inspect residuals, and save or export the analysis.
+- **Explore spectral mixtures.** Use PCA to examine variation across a series, and NMF or MCR-ALS to estimate component spectra and their contributions.
+- **Visualize and export results.** Compare processed spectra as overlays or waterfall plots. Export individual spectra on their own energy grids or combine them in one CSV by aligning them within their shared energy range.
 
-Self-absorption correction is included only as an **experimental work-in-progress tool** and is not yet validated for routine quantitative use.
+**Reference tools.** Save and reuse measured spectra in a personal library, open external HDF5 literature spectra with their stored metadata, and consult bundled atomic X-ray data or calculate compound mass attenuation coefficients. The external literature reference database is a work in progress and is not included.
+
+**Experimental tool.** Self-absorption correction is available for evaluation and has yet to be validated for routine quantitative use.
 
 ## Supported data format
 
@@ -35,7 +25,7 @@ EXACT currently focuses on **HDF5** files used for X-ray absorption spectroscopy
 
 ## Installation
 
-A dedicated **conda environment** is recommended. EXACT 2.7.0 targets **Python 3.14** and **PyQt6**.
+A dedicated **conda environment** is recommended. EXACT 2.7.1 targets **Python 3.14** and **PyQt6**.
 
 Create the environment once. The command below installs the important Qt/scientific dependencies explicitly, including **h5py** (required for HDF5 files):
 
@@ -58,11 +48,11 @@ Then choose **one** installation method.
 1. Open the EXACT repository on GitHub.
 2. Open **Releases** and choose the **Latest** release.
 3. Scroll to the **bottom of the release page** and expand **Assets** if necessary.
-4. Download the file ending in **`.whl`** (for example `maxiv_exact-2.7.0-py3-none-any.whl`).
+4. Download the file ending in **`.whl`** (for example `maxiv_exact-2.7.1-py3-none-any.whl`).
 5. Open a terminal in the folder containing the downloaded wheel and install it:
 
 ```bash
-pip install --no-deps maxiv_exact-2.7.0-py3-none-any.whl
+pip install --no-deps maxiv_exact-2.7.1-py3-none-any.whl
 ```
 
 ### From the source folder
@@ -144,6 +134,8 @@ The active profile can be reviewed and edited using **Setup channels**. This mak
 ## X-ray reference data, reference spectra, and decomposition
 
 The separate **Reference** tab provides bundled Henke/CXRO and Chantler/XrayDB atomic data and can calculate Chantler-based compound mass attenuation coefficients from chemical formulas. This built-in database is separate from the user-maintained **reference spectrum library**, where processed experimental spectra can be saved and loaded again for comparison. For more advanced analysis, selected spectra can be sent to the decomposition tools, where **PCA**, **NMF**, and **MCR-ALS** can be used to explore spectral components and mixtures.
+
+EXACT can also open external HDF5 literature spectra with their stored metadata. The literature reference database is a work in progress and is not included in this release.
 
 ## Testing
 

@@ -96,7 +96,7 @@ For a quick global visibility change, use **Check all / Uncheck all** below the 
 1. Open an HDF5 file and expand its hierarchy in **HDF5 Structure** only as far as necessary.
 2. Check an individual **numeric or Boolean 1D** dataset, even when it is not under `measurement`. For example, `Scan_5270/Metadata/I0 instant current/READ/value` may contain two measured values.
 3. In **Raw Data**, standalone curves are plotted against their **data index**. For a compatible X–Y pair, check `y` to plot it against the stored `x` dataset.
-4. These generic arrays are **for inspection**, not for XAS-specific Processed Data calculations. For normal XAS measurement channels, use the standard family/channel selectors and photon-energy workflow instead.
+4. Generic arrays are for inspection. A compatible X–Y pair with a recognized photon-energy axis in eV can also be used in Processed Data. For normal measurement channels, use the standard family and channel selectors.
 
 
 ---
@@ -263,7 +263,8 @@ Before you export, decide how you want the columns to be named:
 
 Then:
 1) Click **Export/Import → Export CSV**.
-2) Choose where to save.
+2) If prompted, confirm **Align to a common energy grid**. The CSV uses the first visible curve's energy points within the shared range and linearly interpolates the other curves onto them. Choose **Cancel** to keep the original grids by exporting one visible curve at a time.
+3) Choose where to save.
 
 **Controls used (What is what?):** *Export/Import*, *Legend*
 

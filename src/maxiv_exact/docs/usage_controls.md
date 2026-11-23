@@ -321,7 +321,7 @@ Sends the visible processed spectra to **Plotted Data**. Each spectrum keeps its
 #### **Export**
 Exports processed data to CSV. Works for individual curves, not a group. Group CSV export is possible from the Plotted Data tab.
 
-**See also (How to):** *Make a single clean processed curve* and *Sum curves (“Sum up?” dialog)*
+**See also (How to):** *Make a single clean processed curve* and *Sum curves*
 
 ### Processed curve tree (right side)
 The right-hand tree controls which processed curves are visible. **Check all / Uncheck all** below the tree toggles the whole processed set. The button row is aligned with the bottom processing controls.
@@ -417,6 +417,8 @@ Export naming depends on Legend mode:
 - **Entry number** → headers are entry numbers (requires entry ids)
 - **User-defined** → headers are custom names; placeholder `<select curve name>` is not allowed
 - **None** → export is blocked
+
+If visible curves use different energy grids, **Align to a common energy grid** asks before writing one energy column. EXACT uses the first curve in the Plotted Data list as the grid and linearly interpolates the other curves within the shared energy range. If fewer than two usable points remain, export the curves individually by making one at a time visible.
 
 **See also (How to):** *Export plotted curves to CSV (Export/Import → Export CSV)*
 

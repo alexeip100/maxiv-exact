@@ -8,6 +8,34 @@ from .compat import trapezoid
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QDialog
 from PyQt6.QtCore import Qt
 
+
+def _align_csv_spectra(grids, signals):
+    """Use the first spectrum's energy points within the common overlap."""
+    ascending = []
+    for x, y in zip(grids, signals):
+        steps = np.diff(x)
+        if x.size < 2 or not np.isfinite(x).all():
+            raise ValueError("Each spectrum needs at least two finite energy points.")
+        if np.all(steps > 0):
+            ascending.append((x, y))
+        elif np.all(steps < 0):
+            ascending.append((x[::-1], y[::-1]))
+        else:
+            raise ValueError("Each energy grid must be strictly increasing or decreasing.")
+
+    low = max(x[0] for x, _ in ascending)
+    high = min(x[-1] for x, _ in ascending)
+    first = grids[0]
+    overlap = (first >= low) & (first <= high)
+    energy = first[overlap]
+    if energy.size < 2:
+        raise ValueError("Fewer than two energy points on the first curve lie in the shared range.")
+    aligned = [signals[0][overlap]]
+    for x, y in ascending[1:]:
+        aligned.append(np.interp(energy, x, y, left=np.nan, right=np.nan))
+    return energy, aligned
+
+
 class ExportMixin:
     def _csv_save_start_dir(self, data_default_dir=""):
         """Return the session-only CSV save directory.
@@ -130,28 +158,15 @@ class ExportMixin:
                 pass
             return None
 
-        # Collect x/y and headers
-        first_line = self.plotted_lines[visible_keys[0]]
-        x_data = np.asarray(first_line.get_xdata())
-        min_len = len(x_data)
         metadata = getattr(self, "plotted_metadata", {})
         differences = {key for key in visible_keys if "difference" in metadata.get(key, {})}
-        if differences and any(not np.array_equal(self.plotted_lines[key].get_xdata(), x_data)
-                               for key in visible_keys):
-            QMessageBox.warning(
-                self, "Export Not Possible",
-                "The visible curves have different energy grids. Export each difference separately.",
-            )
-            return
 
         headers = []
-        y_columns = []
 
         if legend_mode_norm.startswith("entry"):
             for key in visible_keys:
                 if key in differences:
                     headers.append(self._legend_label_from_entry_number(key, self.plotted_lines[key]))
-                    y_columns.append(np.asarray(self.plotted_lines[key].get_ydata()))
                     continue
                 entry_num = _entry_digits_from_meta(key)
                 if not entry_num:
@@ -164,11 +179,7 @@ class ExportMixin:
                         "that originate from HDF5 entries."
                     )
                     return
-                ln = self.plotted_lines[key]
-                y = np.asarray(ln.get_ydata())
-                min_len = min(min_len, len(y))
                 headers.append(f"entry{entry_num}")
-                y_columns.append(y)
         else:
             # Require explicit user-defined names for ALL visible curves
             for key in visible_keys:
@@ -188,11 +199,7 @@ class ExportMixin:
                         "Please name all curves (click legend entries) or switch Legend to 'Entry number'."
                     )
                     return
-                ln = self.plotted_lines[key]
-                y = np.asarray(ln.get_ydata())
-                min_len = min(min_len, len(y))
                 headers.append(lbl)
-                y_columns.append(y)
 
         # Sanitize and ensure unique headers
         clean = []
@@ -207,9 +214,31 @@ class ExportMixin:
             counts[base] = n
             clean.append(base if n == 1 else f"{base}_{n}")
 
-        x_out = x_data[:min_len]
-        y_out = [np.asarray(y)[:min_len] for y in y_columns]
-        header_row = ["X"] + clean
+        lines = [self.plotted_lines[key] for key in visible_keys]
+        grids = [np.asarray(line.get_xdata(), dtype=float) for line in lines]
+        y_out = [np.asarray(line.get_ydata(), dtype=float) for line in lines]
+        if any(x.ndim != 1 or x.shape != y.shape or not x.size for x, y in zip(grids, y_out)):
+            QMessageBox.warning(self, "Export Not Possible", "Each curve needs paired energy and intensity values.")
+            return
+        x_out = grids[0]
+        align = any(not np.array_equal(x, x_out, equal_nan=True) for x in grids[1:])
+        if align:
+            try:
+                x_out, y_out = _align_csv_spectra(grids, y_out)
+            except ValueError as error:
+                QMessageBox.warning(self, "Export Not Possible", f"{error}\nExport the curves individually.")
+                return
+            answer = QMessageBox.question(
+                self, "Align to a common energy grid",
+                "The visible curves use different energy grids. For this CSV, use the first curve's energy "
+                "points in the shared range and linearly interpolate the other curves onto those points? "
+                "No extrapolation will be performed.\n\nChoose Cancel to export the curves individually.",
+                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if answer != QMessageBox.StandardButton.Ok:
+                return
+        header_row = ["Energy (eV)" if align else "X"] + clean
 
         # Handle missing values (NaNs) consistently (overlap trimming + optional interpolation)
         try:
@@ -235,6 +264,10 @@ class ExportMixin:
                     return
                 x_out, Ymat = cleaned
                 y_out = [Ymat[i, :] for i in range(Ymat.shape[0])]
+        if align and len(x_out) < 2:
+            QMessageBox.warning(self, "Export Not Possible",
+                                "Too few shared energy points contain usable intensities. Export the curves individually.")
+            return
 
         # Default dir: any opened HDF5 dir
         any_file = None
@@ -252,10 +285,10 @@ class ExportMixin:
             with open(file_path, "w", newline="", encoding="utf-8" if differences else None) as f:
                 writer = csv.writer(f)
                 writer.writerow(header_row)
-                energy_precision = ".17g" if differences or any(
+                energy_precision = ".17g" if align or len(lines) == 1 or differences or any(
                     metadata.get(key, {}).get("energy_shift", 0) for key in visible_keys
                 ) else ".6g"
-                intensity_precision = ".17g" if differences else ".6g"
+                intensity_precision = ".17g" if align or len(lines) == 1 or differences else ".6g"
                 for i in range(len(x_out)):
                     row = [format(x_out[i], energy_precision)] + [
                         format(col[i], intensity_precision) for col in y_out

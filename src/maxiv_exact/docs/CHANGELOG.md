@@ -1,3 +1,17 @@
+## [2.7.1] – 2026-11-23
+
+### Added
+- **Spectra → Calibrate E…** applies individual photon-energy shifts in Processed Data while Raw Data retains the measured energy axis.
+- **Spectra → Subtract spectra…** subtracts a scaled reference from one spectrum or a series. Difference spectra retain their input and processing information and can be exported as CSV.
+- Open flat or nested HDF5 literature spectra with their stored energy axes, titles, and metadata. The literature reference database is a work in progress and is not included in this release.
+
+### Changed
+- **Pass** transfers multiple visible spectra from Processed Data to Plotted Data, preserving their displayed intensities and individual energy grids.
+- Waterfall adjustments preserve the current energy zoom while rescaling intensity. Legend renaming opens after the mouse button is released.
+
+### Fixed
+- Combined CSV export aligns curves with different energy grids by linear interpolation within their shared range, with confirmation. Curves can also be exported individually on their own grids.
+
 ## [2.7.0] – 2026-11-12
 
 ### Added

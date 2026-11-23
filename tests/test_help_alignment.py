@@ -9,7 +9,7 @@ def test_active_help_keeps_existing_exact_topics_and_adds_first_time_orientation
     workflows = (DOCS / "usage_workflows.md").read_text(encoding="utf-8")
 
     # Established EXACT topics remain present.
-    for topic in ["Group BG", "Match pre-edge", "Sum up?", "Load reference", "MCR-ALS"]:
+    for topic in ["Group BG", "Match pre-edge", "Sum spectra", "Load reference", "MCR-ALS"]:
         assert topic in controls or topic in workflows
 
     # First-time-user orientation is explicit rather than implied.

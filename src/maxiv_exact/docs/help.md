@@ -100,7 +100,8 @@ The right panel contains three main tabs: **Raw Data**, **Processed Data**, and 
   for the remaining stored attributes. Select a row for a preview beneath
   the plot or double-click for its full text. A curator-proposed energy shift
   describes an alternative scale. The original photon energies are used
-  for plotting.
+  for plotting. The external literature reference database is a work in
+  progress and is not included in this release.
 
 ---
 

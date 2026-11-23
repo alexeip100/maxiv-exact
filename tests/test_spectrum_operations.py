@@ -23,6 +23,50 @@ def test_subtraction_uses_only_overlap_and_preserves_descending_grid_and_negativ
         subtract_spectra(sample, ([401., 401., 402.], [1., 2., 3.]), 1)
 
 
+@pytest.mark.parametrize("decision", ["accept", "cancel", "no overlap", "single"])
+def test_plotted_csv_aligns_only_on_confirmation(tmp_path, decision):
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    from matplotlib.lines import Line2D
+    from PyQt6.QtWidgets import QMessageBox
+
+    from maxiv_exact.export import ExportMixin
+
+    first_x = [405., 404., 403., 402., 401., 400.]
+    other_x = [400.5, 402.5, 404.5] if decision != "no overlap" else [410., 411., 412.]
+    lines = {
+        "first": Line2D(first_x, [5., 4., 3., 2., 1., 0.]),
+        "other": Line2D(other_x, [2., 4., 6.], visible=decision != "single"),
+    }
+    filename = tmp_path / "combined.csv"
+    plotted = SimpleNamespace(
+        plotted_lines=lines,
+        custom_labels={"first": "Sample", "other": "Reference"},
+        _csv_save_dialog=Mock(return_value=str(filename)),
+    )
+    answer = QMessageBox.StandardButton.Ok if decision == "accept" else QMessageBox.StandardButton.Cancel
+    with (patch.object(QMessageBox, "question", return_value=answer) as question,
+          patch.object(QMessageBox, "warning") as warning):
+        ExportMixin.export_ascii_plotted(plotted)
+
+    assert question.call_count == (1 if decision in ("accept", "cancel") else 0)
+    assert warning.call_count == (1 if decision == "no overlap" else 0)
+    np.testing.assert_array_equal(lines["first"].get_xdata(), first_x)
+    np.testing.assert_array_equal(lines["other"].get_xdata(), other_x)
+    if decision in ("cancel", "no overlap"):
+        plotted._csv_save_dialog.assert_not_called()
+        assert not filename.exists()
+    elif decision == "accept":
+        assert filename.read_text().splitlines()[0] == "Energy (eV),Sample,Reference"
+        np.testing.assert_array_equal(
+            np.loadtxt(filename, delimiter=",", skiprows=1),
+            [[404., 4., 5.5], [403., 3., 4.5], [402., 2., 3.5], [401., 1., 2.5]],
+        )
+    else:
+        np.testing.assert_array_equal(np.loadtxt(filename, delimiter=",", skiprows=1)[:, 0], first_x)
+
+
 @pytest.mark.parametrize("group_bg", [False, True])
 def test_pass_transfers_multiple_displayed_spectra_on_their_own_grids(viewer, tmp_path, group_bg):
     from PyQt6.QtWidgets import QMessageBox
