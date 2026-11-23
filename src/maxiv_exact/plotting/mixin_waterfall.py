@@ -9,23 +9,23 @@ class WaterfallMixin:
         checked = is_checked_state(state)
         self.waterfall_slider.setEnabled(checked)
         self.waterfall_spin.setEnabled(checked)
-        self.recompute_waterfall_layout()
+        self.recompute_waterfall_layout(preserve_view=True)
 
     def on_waterfall_slider_changed(self, value):
         param = value / 100.0
         self.waterfall_spin.blockSignals(True)
         self.waterfall_spin.setValue(param)
         self.waterfall_spin.blockSignals(False)
-        self.recompute_waterfall_layout()
+        self.recompute_waterfall_layout(preserve_view=True)
 
     def on_waterfall_spin_changed(self, dvalue):
         ival = int(round(dvalue * 100))
         self.waterfall_slider.blockSignals(True)
         self.waterfall_slider.setValue(ival)
         self.waterfall_slider.blockSignals(False)
-        self.recompute_waterfall_layout()
+        self.recompute_waterfall_layout(preserve_view=True)
 
-    def apply_waterfall_shift(self):
+    def apply_waterfall_shift(self, *, preserve_view=False):
         """Apply/update Waterfall offsets (Uniform step only)."""
         if not getattr(self, "plotted_lines", None):
             return
@@ -67,7 +67,7 @@ class WaterfallMixin:
         if (not plotted_keys_in_order) or (not enabled):
             # No Waterfall: just rescale and redraw
             try:
-                self.rescale_plotted_axes()
+                self.rescale_plotted_axes(preserve_view=preserve_view)
                 if hasattr(self, "canvas_plotted"):
                     self.canvas_plotted.draw()
             except Exception:
@@ -91,7 +91,7 @@ class WaterfallMixin:
                     ymins.append(float(np.min(y[m])))
                     ymaxs.append(float(np.max(y[m])))
             if not ymins or not ymaxs:
-                self.rescale_plotted_axes()
+                self.rescale_plotted_axes(preserve_view=preserve_view)
                 return
             global_range = max(ymaxs) - min(ymins)
             if not np.isfinite(global_range) or global_range <= 0:
@@ -113,7 +113,7 @@ class WaterfallMixin:
             pass
 
         try:
-            self.rescale_plotted_axes()
+            self.rescale_plotted_axes(preserve_view=preserve_view)
             if hasattr(self, "canvas_plotted"):
                 self.canvas_plotted.draw()
         except Exception:
@@ -129,14 +129,14 @@ class WaterfallMixin:
         if hasattr(self, "canvas_plotted"):
             self.canvas_plotted.draw()
 
-    def recompute_waterfall_layout(self):
+    def recompute_waterfall_layout(self, *, preserve_view=False):
         """Compatibility alias used by UI callbacks.
 
         Historically some callbacks call `recompute_waterfall_layout()`. In the current
         implementation, Waterfall is applied via `apply_waterfall_shift()`.
         """
         try:
-            return self.apply_waterfall_shift()
+            return self.apply_waterfall_shift(preserve_view=preserve_view)
         except Exception:
             # Keep UI robust; callers typically don't expect exceptions here.
             return None

@@ -62,7 +62,7 @@ def paired_raw_axis(file, y_path: str, length: int):
     units = _attribute_text(x.attrs.get("units", x.attrs.get("unit", group.attrs.get("x_units", ""))))
     # The existing reference-library format stores photon-energy axes in eV.
     library_record = (
-        parent.startswith("spectra/") and parent.count("/") == 1
+        parent.startswith("spectra/")
         and _attribute_text(file.attrs.get("library_version")) == "1.0"
         and _attribute_text(file.attrs.get("created_with")) in {"maxiv_exact", "flexpes_nexafs"}
     )

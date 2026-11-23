@@ -14,13 +14,13 @@ def test_generic_metadata_remains_raw_only():
 
 def test_processed_plot_uses_classification():
     from pathlib import Path
-    source = Path("src/maxiv_exact/plotting/mixin_processed_plot.py").read_text()
+    source = Path("src/maxiv_exact/plotting/mixin_processed_plot.py").read_text(encoding="utf-8")
     assert "not is_processed_xas_path(str(key).split" in source
 
 
 def test_pass_action_uses_same_eligibility_as_processed_plot():
     from pathlib import Path
-    source = Path("src/maxiv_exact/plotting/mixin_raw_plot.py").read_text()
+    source = Path("src/maxiv_exact/plotting/mixin_raw_plot.py").read_text(encoding="utf-8")
     guard = source.split("def pass_to_plotted_no_clear(self):", 1)[1].split("if self.chk_sum.isChecked():", 1)[0]
     assert "not is_processed_xas_path(str(k).split" in guard
     assert "not is_measurement_path(str(k).split" not in guard

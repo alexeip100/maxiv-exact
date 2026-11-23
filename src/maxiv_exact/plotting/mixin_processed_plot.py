@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 from ..data import lookup_energy
-from ..hdf5_curve_type import is_processed_xas_path
+from ..hdf5_curve_type import is_processed_xas_path, paired_raw_axis
 from ..nexafs_fit.group import GROUP_REQUIRED
 from .. import processing
 from .. import hdf5_loading as h5load
@@ -23,6 +23,23 @@ from .. import hdf5_loading as h5load
 
 class ProcessedPlotMixin:
     """Mixin implementing processed plotting and related helpers."""
+
+    def _is_reference_spectrum(self, key):
+        """Recognize selectable X–Y spectra with a validated photon-energy axis."""
+        if "##" not in str(key):
+            return False
+        source, path = key.split("##", 1)
+        if path.rsplit("/", 1)[-1] != "y":
+            return False
+        signal = self.plot_data.get(key)
+        if signal is None:
+            return False
+        try:
+            with self._open_h5_read(source) as file:
+                pair = paired_raw_axis(file, path, len(signal))
+            return pair is not None and pair[1] == "Photon energy (eV)"
+        except (OSError, KeyError, TypeError, ValueError, RuntimeError):
+            return False
 
     def _plot_multiple_no_bg(self):
         import numpy as np
@@ -76,7 +93,8 @@ class ProcessedPlotMixin:
                 line, = self.proc_ax.plot(
                     x_use,
                     y_use,
-                    label=self.shorten_label(hdf5_path),
+                    label=getattr(self, "_raw_pair_names", {}).get(combined_label)
+                    or self.shorten_label(hdf5_path),
                     color=self._get_persistent_curve_color(combined_label),
                 )
                 line.dataset_key = combined_label
@@ -136,7 +154,8 @@ class ProcessedPlotMixin:
         spectra = {}
         for key, line in self._drawn_spectra().items():
             source_file, path = key.split("##", 1)
-            label = self.curve_display_names.get(key) or self.shorten_label(path)
+            label = (self.curve_display_names.get(key)
+                     or getattr(self, "_raw_pair_names", {}).get(key) or self.shorten_label(path))
             _, has_energy = lookup_energy(self, source_file, path.rpartition("/")[0],
                                           len(self.plot_data[key]), report=True)
             spectra[key] = label, line, has_energy
@@ -318,6 +337,7 @@ class ProcessedPlotMixin:
         # Generic 1D HDF5 metadata are available only in the Raw Data viewer.
         # Never reinterpret their indices as photon energies for XAS processing.
         if any("##" in str(key) and not is_processed_xas_path(str(key).split("##", 1)[1])
+               and not self._is_reference_spectrum(key)
                for key in getattr(self, "plot_data", {})
                if getattr(self, "raw_visibility", {}).get(key, False)):
             try:

@@ -23,6 +23,58 @@ def test_subtraction_uses_only_overlap_and_preserves_descending_grid_and_negativ
         subtract_spectra(sample, ([401., 401., 402.], [1., 2., 3.]), 1)
 
 
+@pytest.mark.parametrize("group_bg", [False, True])
+def test_pass_transfers_multiple_displayed_spectra_on_their_own_grids(viewer, tmp_path, group_bg):
+    from PyQt6.QtWidgets import QMessageBox
+
+    path = str(tmp_path / "spectra.h5")
+    y = np.linspace(1., 2., 101) + np.r_[np.zeros(35), np.ones(66)]
+    reference = "spectra/Ni/000001"
+    measurements = ["entry1/measurement", "entry2/measurement", "entry3/measurement"]
+    with h5py.File(path, "w") as file:
+        for index, parent in enumerate([*measurements, reference]):
+            group = file.create_group(parent)
+            group["x"] = np.linspace(840. + index / 10, 860., y.size)
+            group["y"] = y + index / 10
+            group["i0"] = np.ones_like(y)
+            key = f"{path}##{parent}/y"
+            viewer.plot_data[key] = group["y"][:]
+            viewer.raw_visibility[key] = group_bg if parent == measurements[-1] else True
+        file[reference].attrs.update(x_units="eV", label="Ni literature standard")
+    viewer.update_plot_raw()
+    viewer.data_tabs.setCurrentIndex(1)
+    if group_bg:
+        viewer.combo_bg.setCurrentText("Auto")
+        viewer.chk_group_bg.setChecked(True)
+        assert viewer.chk_show_without_bg.isChecked()
+    viewer.update_plot_processed()
+    expected = {key: tuple(np.asarray(values).copy() for values in line.get_data())
+                for key, line in viewer._drawn_spectra().items()}
+    assert len(expected) == (4 if group_bg else 3)
+    assert viewer.pass_button.isEnabled()
+    viewer.pass_button.click()
+    assert viewer.data_tabs.currentIndex() == 2
+    assert set(viewer.plotted_lines) == expected.keys()
+    for key, (x_values, y_values) in expected.items():
+        passed_x, passed_y = viewer.original_line_data[key]
+        np.testing.assert_array_equal(passed_x, x_values)
+        np.testing.assert_array_equal(passed_y, y_values)
+        assert viewer.plotted_metadata[key]["post_normalization"] == ("Area" if group_bg else "None")
+    reference_key = f"{path}##{reference}/y"
+    assert viewer.plotted_metadata[reference_key]["reference_title"] == "Ni literature standard"
+
+    viewer.data_tabs.setCurrentIndex(1)
+    with patch.object(QMessageBox, "warning"):
+        viewer.pass_button.click()
+    assert viewer.plotted_list.count() == len(expected)
+
+    for key in viewer.plot_data:
+        viewer.raw_visibility[key] = False
+    viewer.raw_visibility[f"{path}##stale/measurement/y"] = True
+    viewer.update_plot_processed()
+    assert not viewer.pass_button.isEnabled()
+
+
 @pytest.fixture
 def viewer(monkeypatch):
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
@@ -241,16 +293,12 @@ def test_group_bg_series_and_i0_difference_use_actual_plot_and_snapshot(viewer, 
     assert all(source in viewer.plot_data for source in keys)
 
 
-def test_raw_library_drop_and_select_y(viewer):
+def drop_hdf5_in_raw_data(viewer, path):
     from PyQt6.QtCore import QMimeData, QPointF, Qt, QUrl
     from PyQt6.QtGui import QDropEvent
     from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QMessageBox, QTreeWidgetItemIterator
+    from PyQt6.QtWidgets import QMessageBox
 
-    path = Path(viewer._get_library_path())
-    if not path.is_file():
-        pytest.skip("Reference library is unavailable in this checkout.")
-    before = sha256(path.read_bytes()).digest()
     mime = QMimeData()
     mime.setUrls([QUrl.fromLocalFile(str(path))])
     event = QDropEvent(QPointF(), Qt.DropAction.CopyAction, mime,
@@ -265,6 +313,18 @@ def test_raw_library_drop_and_select_y(viewer):
 
     root = viewer.tree.topLevelItem(0)
     assert root is not None and root.text(0) == path.name
+    return root
+
+
+def test_raw_library_drop_and_select_y(viewer):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QTreeWidgetItemIterator
+
+    path = Path(viewer._get_library_path())
+    if not path.is_file():
+        pytest.skip("Reference library is unavailable in this checkout.")
+    before = sha256(path.read_bytes()).digest()
+    root = drop_hdf5_in_raw_data(viewer, path)
     spectra = root.child(0)
     assert spectra.text(0) == "spectra"
     spectra.setExpanded(True)
@@ -292,10 +352,117 @@ def test_raw_library_drop_and_select_y(viewer):
             np.testing.assert_array_equal(line.get_ydata(), file[y_path][:])
             assert line.get_label() == file[y_path].parent.attrs["label"]
             assert names[line.dataset_key] == line.get_label()
+    viewer.data_tabs.setCurrentIndex(1)
+    assert len(viewer._drawn_spectra()) == 2
+    for key, line in viewer._drawn_spectra().items():
+        with h5py.File(path, "r") as file:
+            group = file[key.split("##", 1)[1]].parent
+            np.testing.assert_array_equal(line.get_xdata(), group["x"][:])
+            np.testing.assert_array_equal(line.get_ydata(), group["y"][:])
+        assert line.get_label() == names[key]
     spectra.child(0).child(1).setCheckState(0, Qt.CheckState.Unchecked)
     assert len(viewer.raw_ax.lines) == 1
     assert viewer.raw_ax.lines[0].dataset_key.endswith("/000002/y")
+    viewer.update_plot_processed()
+    key, = viewer._drawn_spectra()
+    assert viewer._is_reference_spectrum(key)
+    viewer.pass_to_plotted_no_clear()
+    with h5py.File(path, "r") as file:
+        group = file[key.split("##", 1)[1]].parent
+        np.testing.assert_array_equal(viewer.original_line_data[key], [group["x"][:], group["y"][:]])
+    viewer.legend_mode_combo.setCurrentText("Entry number")
+    assert [entry.get_text() for entry in viewer.plotted_ax.get_legend().get_texts()] == [names[key]]
     assert sha256(path.read_bytes()).digest() == before
+
+
+@pytest.mark.parametrize("accepted", [True, False])
+def test_legend_name_dialog_keeps_dragged_location(viewer, accepted):
+    from matplotlib.backend_bases import MouseButton, MouseEvent
+    from PyQt6.QtWidgets import QApplication, QInputDialog
+
+    viewer._add_reference_curve_to_plotted("reference", [401., 402.], [1., 3.], "Stored title")
+    viewer.custom_labels["reference"] = None
+    viewer.plotted_lines["reference"].set_label("<select curve name>")
+    viewer.update_legend()
+    ax = viewer.plotted_ax
+    canvas = viewer.canvas_plotted
+    legend = ax.get_legend()
+    legend.set_loc((0.35, 0.45))
+    canvas.draw()
+
+    def click(event_name, x, y, button=MouseButton.LEFT):
+        event = MouseEvent(event_name, canvas, x, y, button=button)
+        canvas.callbacks.process(event_name, event)
+
+    def corner():
+        bounds = ax.get_legend().get_window_extent().transformed(ax.transAxes.inverted())
+        return bounds.x0, bounds.y1
+
+    expected = corner()
+    text_box = legend.get_texts()[0].get_window_extent()
+    x = (text_box.x0 + text_box.x1) / 2
+    y = (text_box.y0 + text_box.y1) / 2
+
+    def answer(*args, **kwargs):
+        assert not legend._draggable.got_artist
+        return "New name", accepted
+
+    with patch.object(QInputDialog, "getText", side_effect=answer) as dialog:
+        click("button_press_event", x, y)
+        dialog.assert_not_called()
+        click("button_release_event", x, y)
+        QApplication.processEvents()
+        dialog.assert_called_once()
+
+    click("motion_notify_event", x + 60, y - 40, button=None)
+    canvas.draw()
+    np.testing.assert_allclose(corner(), expected, atol=0.01)
+    assert ax.get_legend().get_texts()[0].get_text() == (
+        "New name" if accepted else "<select curve name>"
+    )
+
+
+def test_waterfall_controls_preserve_toolbar_zoom(viewer):
+    from matplotlib.backend_bases import MouseButton, MouseEvent
+
+    viewer._add_reference_curve_to_plotted("a", [400., 405., 410.], [1., 2., 4.], "A")
+    viewer._add_reference_curve_to_plotted("b", [400., 405., 410.], [0., 1., 3.], "B")
+    viewer.rescale_plotted_axes()
+    ax, toolbar, canvas = viewer.plotted_ax, viewer.toolbar_plotted, viewer.canvas_plotted
+    full = ax.get_xlim(), ax.get_ylim()
+    toolbar.zoom()
+    for event_name, point in (("button_press_event", (0.2, 0.2)),
+                              ("button_release_event", (0.7, 0.7))):
+        x, y = ax.transAxes.transform(point)
+        canvas.callbacks.process(event_name, MouseEvent(event_name, canvas, x, y, MouseButton.LEFT))
+    toolbar.zoom()
+    zoom = ax.get_xlim(), ax.get_ylim()
+    assert zoom != full
+
+    viewer.waterfall_checkbox.setChecked(True)
+    assert ax.get_xlim() == zoom[0]
+    assert ax.get_ylim() == full[1]
+    viewer.waterfall_slider.setValue(40)
+    assert ax.get_xlim() == zoom[0]
+    assert ax.get_ylim()[1] == pytest.approx(5.6 * 1.05)
+    viewer.waterfall_spin.setValue(0.5)
+    assert ax.get_xlim() == zoom[0]
+    assert ax.get_ylim()[1] == pytest.approx(6 * 1.05)
+    assert max(viewer.plotted_lines["a"].get_ydata()) == 6
+    viewer.waterfall_checkbox.setChecked(False)
+    assert ax.get_xlim() == zoom[0]
+    assert ax.get_ylim() == full[1]
+    viewer.waterfall_checkbox.setChecked(True)
+
+    toolbar.back()
+    assert ax.get_ylim()[1] > 6
+    toolbar.forward()
+    assert (ax.get_xlim(), ax.get_ylim()) == zoom
+    toolbar.home()
+    assert ax.get_xlim() == full[0]
+    assert ax.get_ylim()[1] > 6
+    viewer.waterfall_checkbox.setChecked(False)
+    assert (ax.get_xlim(), ax.get_ylim()) == full
 
 
 def test_raw_pair_names_disambiguate_duplicate_titles(viewer, tmp_path):
@@ -317,3 +484,105 @@ def test_raw_pair_names_disambiguate_duplicate_titles(viewer, tmp_path):
         f"{path}##c/y": "/c",
     }
     assert [line.get_label() for line in viewer.raw_ax.lines] == ["Reference (pairs.h5:/a)", "/c"]
+    viewer.update_plot_processed()
+    assert not viewer._drawn_spectra()
+    assert not viewer._is_reference_spectrum(f"{path}##a/y")
+
+
+def test_raw_nested_library_drop_and_metadata(viewer, tmp_path):
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QDialog, QPlainTextEdit, QTreeWidgetItemIterator
+
+    file_path = tmp_path / "nested_reference.h5"
+    names = {
+        "spectra/Ni/L2,3/NiO/000003": "NiO | TEY | Finazzi et al. 1999",
+        "spectra/O/K/NiO/000003": "NiO | TEY | O K-edge",
+    }
+    disclaimer = "Data usage and provenance.\n" * 60 + "End of disclaimer."
+    processing = "Background subtracted and area normalized."
+    citation = "Citation and acquisition metadata. " * 50 + "End of citation."
+    with h5py.File(file_path, "w") as file:
+        file.attrs.update(library_version="1.0", created_with="maxiv_exact")
+        file["documentation/disclaimer"] = disclaimer
+        file["documentation/processing_method"] = processing
+        for index, (path, title) in enumerate(names.items()):
+            group = file.create_group(path)
+            group.attrs.update(title=title, citation=citation)
+            group["x"] = np.array([849.05, 851.42, 855.18]) - index * 320
+            group["y"] = [0.03, 0.4 + index, -0.02]
+            group["y"].attrs["processing"] = processing
+        file["instrument/status_values"] = [7, 8]
+    before = sha256(file_path.read_bytes()).digest()
+    root = drop_hdf5_in_raw_data(viewer, file_path)
+
+    def find_item(*segments):
+        item = root
+        for name in segments:
+            item.setExpanded(True)
+            item = next(item.child(i) for i in range(item.childCount())
+                        if item.child(i).text(0) == name)
+        return item
+
+    role = Qt.ItemDataRole.CheckStateRole
+    for path in names:
+        group = find_item(*path.split("/"))
+        assert group.data(0, role) is None
+        x_item = find_item(*path.split("/"), "x")
+        y_item = find_item(*path.split("/"), "y")
+        assert x_item.checkState(0) == Qt.CheckState.Unchecked
+        y_item.setCheckState(0, Qt.CheckState.Checked)
+        assert x_item.checkState(0) == Qt.CheckState.Unchecked
+
+    displayed = {}
+    rows = QTreeWidgetItemIterator(viewer.raw_tree)
+    while rows.value():
+        item = rows.value()
+        displayed[item.data(0, Qt.ItemDataRole.UserRole)] = item.text(0)
+        rows += 1
+    assert viewer.raw_ax.get_xlabel() == "Photon energy (eV)"
+    assert len(viewer.raw_ax.lines) == len(names)
+    with h5py.File(file_path, "r") as file:
+        for line in viewer.raw_ax.lines:
+            path = line.dataset_key.split("##", 1)[1].rpartition("/")[0]
+            assert line.get_label() == displayed[line.dataset_key] == names[path]
+            np.testing.assert_array_equal(line.get_xdata(), file[f"{path}/x"][:])
+            np.testing.assert_array_equal(line.get_ydata(), file[f"{path}/y"][:])
+
+    viewer.data_tabs.setCurrentIndex(1)
+    assert len(viewer._drawn_spectra()) == len(names)
+    for key, line in viewer._drawn_spectra().items():
+        path = key.split("##", 1)[1].rpartition("/")[0]
+        assert line.get_label() == names[path]
+        np.testing.assert_array_equal(line.get_data(), next(
+            raw.get_data() for raw in viewer.raw_ax.lines if raw.dataset_key == key
+        ))
+    key = next(iter(viewer._drawn_spectra()))
+    original_x, original_y = (array.copy() for array in viewer._get_drawn_processed_xy(key))
+    viewer._energy_shifts[key] = 0.153
+    viewer.update_plot_processed()
+    np.testing.assert_allclose(viewer._get_drawn_processed_xy(key)[0], original_x + 0.153)
+    np.testing.assert_array_equal(viewer._get_drawn_processed_xy(key)[1], original_y)
+
+    finazzi = next(iter(names)).split("/")
+    for item, expected in (
+        (find_item("documentation", "disclaimer"), disclaimer),
+        (find_item("documentation", "processing_method"), processing),
+        (find_item(*finazzi, "Attributes", "citation"), citation),
+        (find_item(*finazzi, "y", "Attributes", "processing"), processing),
+    ):
+        assert item.data(0, role) is None
+        captured = []
+
+        def inspect_dialog(dialog):
+            captured.append(dialog.findChild(QPlainTextEdit).toPlainText())
+            return QDialog.DialogCode.Accepted
+
+        with patch.object(QDialog, "exec", inspect_dialog):
+            viewer.tree.itemDoubleClicked.emit(item, 0)
+        assert captured == [expected]
+
+    find_item("instrument", "status_values").setCheckState(0, Qt.CheckState.Checked)
+    standalone = next(line for line in viewer.raw_ax.lines
+                      if line.dataset_key.endswith("instrument/status_values"))
+    np.testing.assert_array_equal(standalone.get_xdata(), [0, 1])
+    assert sha256(file_path.read_bytes()).digest() == before

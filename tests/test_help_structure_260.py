@@ -34,5 +34,5 @@ def test_control_headings_and_transfer_boundaries():
     assert a < b < d
     assert headings[b][0] == headings[a][0] == headings[d][0] == 4
     text = (DOCS / 'usage_controls.md').read_text(encoding='utf-8')
-    assert 'view-only* and are not sent through XAS-specific Processed Data operations' in text
+    assert 'when its axis is recognized as photon energy in eV' in text
     assert 'How to? → Analyze fluorescence-detector maps (FL Map Analysis)' in text

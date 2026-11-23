@@ -131,3 +131,71 @@ def test_structure_metadata_and_text_leave_paired_curves_selectable(tmp_path, mo
     finally:
         viewer.close()
         app.processEvents()
+
+
+def test_literature_groups_keep_provenance_and_published_axis(tmp_path, monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QApplication
+    from maxiv_exact.ui import HDF5Viewer
+
+    path = tmp_path / "reference.h5"
+    entry_path = "spectra/Cu/L2,3/Cu/000036"
+    with h5py.File(path, "w") as file:
+        file.attrs.update(database_role="master", master_database_version="2.0")
+        spectrum = file.create_group(entry_path)
+        spectrum.attrs.update(
+            label="Cu metal", x_units="eV", electronic_environment="Metallic Cu",
+            authors="Yang et al.", year=2022, doi="10.example/cu",
+            figure="Figure S6(a), red trace", proposed_energy_shift_eV=-1.0,
+            source_pdf_sha256="pdfhash",
+        )
+        spectrum.create_dataset("x", data=[930., 931., 932.])
+        spectrum.create_dataset("y", data=[1., 2., 4.])
+        file.copy(spectrum, spectrum.parent, name="000037")
+        spectrum.parent["000037"].attrs["proposed_energy_shift_eV"] = 0.0
+
+    def child(parent, name):
+        return next(parent.child(i) for i in range(parent.childCount())
+                    if parent.child(i).text(0) == name)
+
+    app = QApplication.instance() or QApplication([])
+    viewer = HDF5Viewer()
+    try:
+        viewer._apply_loaded_hdf5_payload(scan_file(path))
+        item = viewer.tree.topLevelItem(0)
+        for name in entry_path.split("/"):
+            item.setExpanded(True)
+            item = child(item, name)
+        item.setExpanded(True)
+        attrs = child(item, "Attributes")
+        attrs.setExpanded(True)
+        identify = child(attrs, "Identify spectrum")
+        source = child(attrs, "Source")
+        processing = child(attrs, "Digitization and processing")
+        assert identify.isExpanded() and not source.isExpanded() and not processing.isExpanded()
+
+        shift = child(identify, "Curator-proposed energy shift")
+        viewer.tree.setCurrentItem(shift)
+        assert viewer.scalar_display_raw.text() == "−1.0 eV · currently off"
+        assert shift.data(0, Qt.ItemDataRole.UserRole) is None
+
+        source.setExpanded(True)
+        with patch.object(viewer, "_show_hdf5_text") as show:
+            viewer.open_hdf5_tree_text(child(source, "Citation"), 0)
+        assert show.call_args.args[1] == "Yang et al. (2022)\nDOI: 10.example/cu"
+        assert viewer._read_hdf5_tree_text(child(source, "Figure / panel / trace"))[1] == "Figure S6(a), red trace"
+        assert viewer._read_hdf5_tree_text(child(processing, "source_pdf_sha256"))[1] == "pdfhash"
+
+        child(item, "y").setCheckState(0, Qt.CheckState.Checked)
+        curve, = viewer.raw_ax.lines
+        np.testing.assert_array_equal(curve.get_xdata(), [930., 931., 932.])
+
+        zero = child(item.parent(), "000037")
+        zero.setExpanded(True)
+        zero_attrs = child(zero, "Attributes")
+        zero_attrs.setExpanded(True)
+        assert child(zero_attrs, "Identify spectrum").childCount() == 1
+    finally:
+        viewer.close()
+        app.processEvents()

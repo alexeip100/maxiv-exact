@@ -82,7 +82,7 @@ class GridAxesMixin:
         except Exception:
             pass
 
-    def rescale_plotted_axes(self):
+    def rescale_plotted_axes(self, *, preserve_view=False):
         x_all, y_all = [], []
         for key, line in self.plotted_lines.items():
             if line.get_visible():
@@ -96,8 +96,24 @@ class GridAxesMixin:
             ymin, ymax = min(y_all), max(y_all)
             x_margin = (xmax - xmin) * 0.05 if (xmax - xmin) else 1
             y_margin = (ymax - ymin) * 0.05 if (ymax - ymin) else 1
-            self.plotted_ax.set_xlim(xmin - x_margin, xmax + x_margin)
-            self.plotted_ax.set_ylim(ymin - y_margin, ymax + y_margin)
+            xlim = (xmin - x_margin, xmax + x_margin)
+            ylim = (ymin - y_margin, ymax + y_margin)
+            ax = self.plotted_ax
+            toolbar = getattr(self, "toolbar_plotted", None)
+            stack = getattr(toolbar, "_nav_stack", None)
+            home = stack[0].get(ax) if preserve_view and stack else None
+            if home is not None:
+                # Home and the full-view history entries share this view.
+                home_view, _positions = home
+                was_full_energy_range = ax.get_xlim() == home_view["xlim"]
+                home_view.update(xlim=xlim, ylim=ylim)
+                if was_full_energy_range:
+                    ax.set_xlim(xlim)
+                ax.set_ylim(ylim)
+                self.canvas_plotted.draw_idle()
+                return
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
 # Re-apply grid mode after rescaling axes
             try:
                 self._apply_grid_mode()
@@ -108,7 +124,6 @@ class GridAxesMixin:
             # with the current full-data limits. Otherwise the toolbar may
             # restore a stale range from a previously plotted energy region.
             try:
-                toolbar = getattr(self, "toolbar_plotted", None)
                 if toolbar is not None:
                     toolbar.update()
                     toolbar.push_current()

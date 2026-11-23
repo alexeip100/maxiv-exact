@@ -19,9 +19,3 @@ def test_waterfall_visual_order_matches_plotted_list_and_legend_order():
     src = _read("src/maxiv_exact/plotting/mixin_waterfall.py")
     assert "n_curves = len(plotted_keys_in_order)" in src
     assert "(n_curves - 1 - idx) * step" in src
-
-
-def test_pass_state_counts_only_current_processed_curves():
-    src = _read("src/maxiv_exact/plotting/mixin_core.py")
-    assert 'vc = len(self._visible_processed_keys())' in src
-    assert 'vc == 1' in src

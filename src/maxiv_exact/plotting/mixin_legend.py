@@ -5,7 +5,7 @@ Moved from maxiv_exact.plotting.PlottingMixin to reduce module size and isolate 
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QDialog, QInputDialog
 
 try:
@@ -383,7 +383,21 @@ class LegendMixin:
         if button not in (1, None):
             return
 
-        if hasattr(artist, "get_text"):
+        self._legend_name_press = (leg, artist, mouse.x, mouse.y)
+
+    def on_legend_release(self, event):
+        """Open the rename dialog after Matplotlib has finished handling the click."""
+        press = getattr(self, "_legend_name_press", None)
+        self._legend_name_press = None
+        if press is None or event.button != 1 or event.x is None or event.y is None:
+            return
+        leg, artist, x, y = press
+        if (event.x - x)**2 + (event.y - y)**2 <= 9:
+            QTimer.singleShot(0, lambda: self._rename_legend_entry(leg, artist))
+
+    def _rename_legend_entry(self, leg, artist):
+        if leg is self.plotted_ax.get_legend() and artist in leg.get_texts():
+            texts = list(leg.get_texts())
             old_text = artist.get_text()
             new_text, ok = QInputDialog.getText(
                 self,
@@ -576,7 +590,9 @@ class LegendMixin:
                 except Exception:
                     pass
                 try:
-                    saved_bbox = existing_leg.get_bbox_to_anchor()
+                    saved_bbox = existing_leg.get_bbox_to_anchor().transformed(
+                        ax.transAxes.inverted()
+                    ).bounds
                 except Exception:
                     pass
             try:
@@ -683,6 +699,8 @@ class LegendMixin:
                 except Exception:
                     pass
 
+                if existing_leg is not None:
+                    existing_leg.set_draggable(False)
                 # Recreate legend at its previous location if known
                 saved_loc = getattr(self, "_plotted_legend_loc", None)
 

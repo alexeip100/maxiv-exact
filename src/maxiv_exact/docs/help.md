@@ -93,6 +93,15 @@ The right panel contains three main tabs: **Raw Data**, **Processed Data**, and 
   textual metadata for the currently selected item(s) (for example,
   experimental parameters or scan comments).
 
+- **Literature spectrum attributes:** Expand **Attributes** on a master or
+  curated literature spectrum. **Identify spectrum** opens first with the
+  sample, electronic environment, and available energy information. Expand
+  **Source** for the citation and figure or **Digitization and processing**
+  for the remaining stored attributes. Select a row for a preview beneath
+  the plot or double-click for its full text. A curator-proposed energy shift
+  describes an alternative scale. The original photon energies are used
+  for plotting.
+
 ---
 
 ## Processed Data Tab

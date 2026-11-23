@@ -14,6 +14,7 @@
       "Energy": [
         "pcap_energy_av",
         "mono_traj_energy",
+        "beamline_energy",
         "photon energy",
         "energy",
         "x"

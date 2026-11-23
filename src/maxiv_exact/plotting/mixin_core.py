@@ -155,6 +155,8 @@ class CorePlottingMixin:
         meta = getattr(self, "plotted_metadata", {}).get(key, {})
         if "difference" in meta:
             return getattr(self, "curve_display_names", {}).get(key) or meta["display_name"]
+        if meta.get("reference_title"):
+            return meta["reference_title"]
 
 # Synthetic summed curves ("__SUM__/...") do not have an entry number. / In "Entry number" mode we want their intrinsic display names (e.g. the
         try:
@@ -225,42 +227,15 @@ class CorePlottingMixin:
 
 
     def update_pass_button_state(self):
-        try:
-            cond_sum = bool(getattr(self, "chk_sum", None) and self.chk_sum.isChecked())
-
-            # Count only curves that are actually part of the current Processed Data
-            # selection. ``raw_visibility`` can retain stale/auxiliary keys, which used
-            # to make Pass appear disabled even when exactly one processed curve was
-            # checked.
-            try:
-                if hasattr(self, "_visible_processed_keys"):
-                    vc = len(self._visible_processed_keys())
-                else:
-                    pdata = getattr(self, "plot_data", {}) or {}
-                    vis = getattr(self, "raw_visibility", {}) or {}
-                    vc = sum(1 for key in pdata if vis.get(key, False))
-            except Exception:
-                vc = self.visible_curves_count()
-
-            group_cond = False
-            try:
-                if (not cond_sum) and vc >= 2:
-                    mode = str(getattr(self, "combo_bg").currentText()) if hasattr(self, "combo_bg") else ""
-                    if str(mode) in ("Automatic", "Auto") and getattr(self, "chk_show_without_bg", None) is not None and self.chk_show_without_bg.isChecked():
-                        cb = getattr(self, "chk_group_bg", None)
-                        if cb is not None and cb.isEnabled() and cb.isChecked():
-                            group_cond = True
-            except Exception:
-                group_cond = False
-
-            if getattr(self, "pass_button", None):
-                differences = getattr(self, "_difference_sources", {})
-                snapshots_only = bool(differences and vc and all(
-                    key in differences for key in self._visible_processed_keys()
-                ))
-                self.pass_button.setEnabled(bool(cond_sum or vc == 1 or group_cond or snapshots_only))
-        except Exception:
-            pass
+        button = getattr(self, "pass_button", None)
+        ax = getattr(self, "proc_ax", None)
+        if button is None or ax is None:
+            return
+        if self.chk_sum.isChecked():
+            enabled = bool(ax.lines and self._visible_processed_keys())
+        else:
+            enabled = bool(self._drawn_spectra())
+        button.setEnabled(enabled)
 
 # _on_group_bg_checkbox_toggled moved to plotting/mixin_group_bg.py
 

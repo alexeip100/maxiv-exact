@@ -156,7 +156,7 @@ class ProcessingMixin:
             bg = np.zeros_like(x_eval, dtype=float)
         return bg, p
 
-    def recompute_waterfall_layout(self):
+    def recompute_waterfall_layout(self, *, preserve_view=False):
         """(Re)apply Waterfall (Uniform step) based on the checkbox + slider/spin."""
         enabled = False
         try:
@@ -174,7 +174,7 @@ class ProcessingMixin:
         if not enabled:
             try:
                 self.restore_original_line_data()
-                self.rescale_plotted_axes()
+                self.rescale_plotted_axes(preserve_view=preserve_view)
                 if hasattr(self, 'canvas_plotted'):
                     self.canvas_plotted.draw()
             except Exception:
@@ -183,7 +183,7 @@ class ProcessingMixin:
 
         # Delegate to apply_waterfall_shift (Uniform step only)
         try:
-            self.apply_waterfall_shift()
+            self.apply_waterfall_shift(preserve_view=preserve_view)
         except Exception as ex:
             print('apply_waterfall_shift error:', ex)
     def reset_manual_mode(self):

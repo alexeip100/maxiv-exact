@@ -1233,6 +1233,7 @@ class HDF5Viewer(DataMixin, ProcessingMixin, TreeViewMixin, PlottingMixin, Expor
         # SIGNAL CONNECTIONS
         #######################################################################
         self.canvas_plotted.mpl_connect('pick_event', self.on_legend_pick)
+        self.canvas_plotted.mpl_connect('button_release_event', self.on_legend_release)
         self.cid_press = self.canvas_proc.mpl_connect("button_press_event", self.on_press)
         self.cid_motion = self.canvas_proc.mpl_connect("motion_notify_event", self.on_motion)
         self.cid_release = self.canvas_proc.mpl_connect("button_release_event", self.on_release)

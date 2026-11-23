@@ -10,9 +10,11 @@ import logging
 import json
 import sys
 from . import hdf5_loading as h5load
-from .hdf5_curve_type import is_derived_spectrum_path
+from .hdf5_curve_type import is_derived_spectrum_path, is_measurement_path, paired_raw_axis
 from .hdf5_metadata import (attribute_preview, compact_text,
-                            describe_tree_object, format_hdf5_value)
+                            describe_tree_object, format_hdf5_value,
+                            is_literature_spectrum, literature_attribute_groups,
+                            literature_attribute_summary)
 logger = logging.getLogger(__name__)
 from importlib.resources import files
 from PyQt6.QtWidgets import (QApplication, QDialog, QDialogButtonBox, QFileDialog,
@@ -23,6 +25,7 @@ from PyQt6.QtCore import Qt, QTimer, QProcess
 
 _ATTRIBUTE_ROLE = Qt.ItemDataRole.UserRole + 1
 _TEXT_DATASET_ROLE = Qt.ItemDataRole.UserRole + 2
+_METADATA_SUMMARY_ROLE = Qt.ItemDataRole.UserRole + 3
 
 
 class DataMixin:
@@ -1155,16 +1158,28 @@ class DataMixin:
             item.addChild(branch)
         return branch
 
-    def _populate_attributes(self, branch, attributes):
+    def _populate_attributes(self, branch, obj):
         branch.takeChildren()
-        rows = []
-        for name in attributes:
-            row = QTreeWidgetItem([name])
-            row.setData(0, _ATTRIBUTE_ROLE, name)
+
+        def make_row(label, attribute, summary=None):
+            row = QTreeWidgetItem([label])
+            row.setData(0, _ATTRIBUTE_ROLE, attribute)
+            row.setData(0, _METADATA_SUMMARY_ROLE, summary)
             row.setFlags(row.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
             row.setToolTip(0, "Select to preview below the plot. Double-click to read the complete value.")
-            rows.append(row)
-        branch.addChildren(rows)
+            return row
+
+        if not is_literature_spectrum(obj):
+            branch.addChildren([make_row(name, name) for name in obj.attrs])
+            return
+        for label, rows, expanded in literature_attribute_groups(obj.attrs):
+            if not rows:
+                continue
+            group = QTreeWidgetItem([label])
+            group.setFlags(group.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+            group.addChildren([make_row(*row) for row in rows])
+            branch.addChild(group)
+            group.setExpanded(expanded)
 
     def _insert_hdf5_tree_child(self, parent, child):
         index = parent.childCount() - int(self._attributes_node(parent) is not None)
@@ -1179,7 +1194,7 @@ class DataMixin:
         if branch is not None and not self._tree_item_has_dummy_child(branch):
             branch.takeChildren()
             if branch.isExpanded():
-                self._populate_attributes(branch, obj.attrs)
+                self._populate_attributes(branch, obj)
             else:
                 branch.addChild(QTreeWidgetItem(["(click to expand)"]))
         if not isinstance(obj, h5py.Group):
@@ -1731,7 +1746,7 @@ class DataMixin:
             with self._open_h5_read(abs_path) as f:
                 obj = f[hdf5_path] if hdf5_path else f
                 if is_attributes:
-                    self._populate_attributes(item, obj.attrs)
+                    self._populate_attributes(item, obj)
                 elif isinstance(obj, h5py.Group):
                     item.takeChild(0)
                     for name in obj:
@@ -1744,7 +1759,8 @@ class DataMixin:
 
     def preview_hdf5_attribute(self, item):
         """Show the selected attribute in the Raw Data scalar preview."""
-        if not isinstance(item.data(0, _ATTRIBUTE_ROLE), str):
+        if not (isinstance(item.data(0, _ATTRIBUTE_ROLE), str)
+                or item.data(0, _METADATA_SUMMARY_ROLE)):
             return False
         try:
             content = self._read_hdf5_tree_text(item, preview=True)
@@ -1756,9 +1772,15 @@ class DataMixin:
 
     def _read_hdf5_tree_text(self, item, *, preview=False):
         attribute = item.data(0, _ATTRIBUTE_ROLE)
+        summary = item.data(0, _METADATA_SUMMARY_ROLE)
         is_attribute = isinstance(attribute, str)
-        if is_attribute:
-            owner = item.parent().parent()
+        if is_attribute or summary:
+            branch = item.parent()
+            while branch is not None and branch.data(0, _ATTRIBUTE_ROLE) is not True:
+                branch = branch.parent()
+            if branch is None:
+                return None
+            owner = branch.parent()
         elif item.data(0, _TEXT_DATASET_ROLE):
             owner = item
         else:
@@ -1769,6 +1791,9 @@ class DataMixin:
         abs_path, hdf5_path = payload
         with self._open_h5_read(abs_path) as file:
             obj = file[hdf5_path] if hdf5_path else file
+            if summary:
+                title = f"{hdf5_path or '/'} · {item.text(0)}"
+                return title, literature_attribute_summary(obj.attrs, summary, preview=preview)
             if is_attribute:
                 title = f"{hdf5_path or '/'} · {attribute}"
                 if preview:
@@ -1841,7 +1866,18 @@ class DataMixin:
 
 def lookup_energy(viewer, abs_path: str, parent: str, length: int, *, report=False, dataset_key=None):
     """Resolve a spectrum's original energy grid and apply its current correction."""
-    energy, has_photon_energy = _lookup_original_energy(viewer, abs_path, parent, length)
+    path = str(dataset_key).split("##", 1)[-1]
+    pair = None
+    if dataset_key and path.rsplit("/", 1)[-1] == "y" and not is_measurement_path(path):
+        try:
+            with viewer._open_h5_read(abs_path) as file:
+                pair = paired_raw_axis(file, path, length)
+        except (OSError, KeyError, TypeError, ValueError, RuntimeError):
+            pass
+    if pair is not None:
+        energy, has_photon_energy = pair[0], pair[1] == "Photon energy (eV)"
+    else:
+        energy, has_photon_energy = _lookup_original_energy(viewer, abs_path, parent, length)
     shift = getattr(viewer, "_energy_shifts", {}).get(dataset_key, 0.0)
     if has_photon_energy and shift:
         energy = np.asarray(energy, dtype=float) + shift

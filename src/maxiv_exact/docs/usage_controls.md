@@ -220,6 +220,8 @@ Dropdown enabled only when **Normalize by I₀?** is checked.
 
 Candidates come from the channel mapping profile.
 
+References with a recognized photon-energy axis in eV also appear in **Processed Data**. Check their `y` dataset, then use the existing calibration, subtraction, summation, **Pass**, and **Export** controls. To start with stored intensities, choose **None** for background and leave **Normalize by I₀?** and **Subtract BG** unchecked. Literature spectra may already have background subtraction and area normalization applied. Inspect their metadata before choosing further processing.
+
 #### **Spectra**
 Choose **Sum spectra…**, **Calibrate E…**, or **Subtract spectra…**. Each action uses only the spectra currently drawn in **Processed Data**.
 
@@ -312,7 +314,7 @@ Opens a standalone analysis window for the current **Processed Data** selection.
 **FY Analysis** opens a menu with **FL Map Analysis…** and **SA Correction…**. **FL Map Analysis…** opens an independent fluorescence-detector-map window: inspect the 2D map and emission spectra, select fluorescence ROIs to obtain excitation spectra, and optionally fit emission peaks across the scan. You can send measured ROI spectra or fitted peak-area spectra to Processed Data. A fit is not required to explore ROIs. See **FY Analysis: fluorescence maps and experimental correction** below for the controls, and **How to? → Analyze fluorescence-detector maps (FL Map Analysis)** for the guided workflow. **SA Correction…** is experimental and still work in progress; it displays a confirmation warning before opening.
 
 #### **Pass**
-Sends the current processed curve(s) to **Plotted Data** without clearing existing plotted curves.
+Sends the visible processed spectra to **Plotted Data**. Each spectrum keeps its displayed intensity values and its own energy grid. Curves already passed are skipped.
 
 **When to use:** you want to style/export from Plotted Data and keep multiple curves together.
 
@@ -381,7 +383,7 @@ Dropdown: **Legend**
 
 Behavior:
 - **User-defined**: rename labels by clicking legend entries.
-- **Entry number**: labels by `entry#### → ####`.
+- **Entry number** shows scan numbers for experimental curves and stored titles for reference spectra.
 
 **Tips:** If Legend is **None**, CSV export from Plotted Data is blocked (there is no naming scheme).
 
@@ -396,6 +398,7 @@ Checkbox: **Annotation**
 #### Waterfall
 Checkbox + slider/spinbox (enabled only when Waterfall is enabled).  
 Applies a uniform vertical offset to separate many curves visually.
+Changing the offset or toggling Waterfall keeps the current energy range and rescales the intensity axis. Use **Home** to see the full energy range with the current offsets.
 
 #### Grid
 Dropdown: `None / Coarse / Fine / Finest`
@@ -538,4 +541,4 @@ The **FY Analysis** menu is in **Processed Data**. It contains **FL Map Analysis
 
 ## Generic 1D datasets outside measurement
 
-In **HDF5 Structure**, individually checking a supported numeric or Boolean 1D dataset outside `measurement` plots it in **Raw Data** against **data index** (0, 1, 2, …) by default. A compatible `y` dataset uses its sibling `x` values. These datasets are *view-only* and are not sent through XAS-specific Processed Data operations. Normal measurement channels retain their existing photon-energy axes. Bulk channel-family selection remains focused on normal measurement channels, so it does not automatically select thousands of metadata items. Non-numeric, scalar, and multidimensional datasets are not treated as ordinary 1D curves.
+In **HDF5 Structure**, individually checking a supported numeric or Boolean 1D dataset outside `measurement` plots it in **Raw Data** against **data index** (0, 1, 2, …) by default. A compatible `y` dataset uses its sibling `x` values and becomes available in **Processed Data** when its axis is recognized as photon energy in eV. Normal measurement channels retain their existing photon-energy axes. Bulk channel-family selection remains focused on normal measurement channels, so it does not automatically select thousands of metadata items. Non-numeric, scalar, and multidimensional datasets are not treated as ordinary 1D curves.

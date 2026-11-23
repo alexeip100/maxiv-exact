@@ -316,6 +316,7 @@ class TreeViewMixin:
                             label = str(cdn[key])
                     except Exception:
                         label = None
+                    label = label or getattr(self, "_raw_pair_names", {}).get(key)
                     if not label:
                         label = self.shorten_label(parts[1]) if len(parts) == 2 else key
                     child = QTreeWidgetItem([label])

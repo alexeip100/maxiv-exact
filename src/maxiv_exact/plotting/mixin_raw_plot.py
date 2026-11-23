@@ -44,6 +44,7 @@ class RawPlotMixin:
 
         visible_keys = [key for key in self.plot_data if self.raw_visibility.get(key, False)]
         if any("##" in str(k) and not is_processed_xas_path(str(k).split("##", 1)[1])
+               and not self._is_reference_spectrum(k)
                for k in visible_keys):
             QMessageBox.information(self, "Raw viewer only",
                 "Generic HDF5 datasets can be viewed in Raw Data, but cannot be sent "
@@ -55,166 +56,21 @@ class RawPlotMixin:
             key = visible_keys[0]
         else:
             if len(visible_keys) != 1:
-                # Multi-pass supports Group BG results and selections of difference snapshots.
                 differences = getattr(self, "_difference_sources", {})
-                snapshots_only = bool(visible_keys) and all(key in differences for key in visible_keys)
-                allow_multi = False
-                try:
-                    mode = str(getattr(self, "combo_bg").currentText()) if hasattr(self, "combo_bg") else ""
-                    cb = getattr(self, "chk_group_bg", None)
-                    if (
-                        len(visible_keys) >= 2
-                        and str(mode) in ("Automatic", "Auto")
-                        and cb is not None
-                        and cb.isEnabled()
-                        and cb.isChecked()
-                        and getattr(self, "chk_show_without_bg", None) is not None
-                        and self.chk_show_without_bg.isChecked()
-                        and (not self.chk_sum.isChecked())
-                    ):
-                        allow_multi = True
-                except Exception:
-                    allow_multi = False
-
-                if not (allow_multi or snapshots_only):
-                    QMessageBox.warning(self, "Warning", "Please select exactly one dataset, or enable 'Sum'.")
-                    return
-
-                # --- Multi-pass: pass all selected curves at once ---
-                try:
-                    deg = int(self.combo_poly.currentText())
-                except Exception:
-                    deg = 2
-                try:
-                    pre = float(self.spin_preedge.value()) / 100.0
-                except Exception:
-                    pre = 0.12
-
-                # Post-normalization mode
-                norm_mode = "None"
-                try:
-                    if hasattr(self, "combo_post_norm"):
-                        # In Group BG mode the combobox is disabled but still reflects the enforced mode ("Area").
-                        if (getattr(self, "chk_group_bg", None) is not None and self.chk_group_bg.isChecked()):
-                            norm_mode = str(self.combo_post_norm.currentText())
-                        elif self.combo_post_norm.isEnabled():
-                            norm_mode = str(self.combo_post_norm.currentText())
-                except Exception:
-                    norm_mode = "None"
-
-                # Group backgrounds (fallback handled inside)
-                source_keys = [key for key in visible_keys if key not in differences]
-                _x_common, bgs = self._compute_group_auto_backgrounds(source_keys, deg=deg, pre_edge_percent=pre)
-                if bgs is None:
-                    bgs = {}
-
-                # If Area post-normalization is active, equalize the *area-normalized jump* across the group
-                # by adding a zero-area tilt term to the per-spectrum background.
-                try:
-                    m = str(norm_mode).strip().lower()
-                    _equalize_jump = m in ("area", "area=1")
-                except Exception:
-                    _equalize_jump = False
-
-                if _equalize_jump and len(visible_keys) >= 2:
-                    # Coupled group constraint for Area post-normalization:
-                    # - pre-edge baseline after BG subtraction is set to 0 for each spectrum
-                    # - jump after BG subtraction and Area-normalization is equalized across the group
-                    # - optionally, pre-edge slope after BG subtraction is also matched across the group
-                    try:
-                        items_simple = {}
-                        for key in source_keys:
-                            parts = key.split("##", 1)
-                            if len(parts) != 2:
-                                continue
-                            abs_path, hdf5_path = parts
-                            parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
-                            y_data = self.plot_data.get(key)
-                            if y_data is None:
-                                continue
-                            x_data = lookup_energy(self, abs_path, parent, len(y_data), dataset_key=key)
-                            y_proc = processing.apply_normalization(self, abs_path, parent, y_data)
-                            x_arr = np.asarray(x_data, dtype=float).ravel()
-                            y_arr = np.asarray(y_proc, dtype=float).ravel()
-                            mlen = min(int(x_arr.size), int(y_arr.size))
-                            if mlen < 3:
-                                continue
-                            x_use = x_arr[:mlen]
-                            y_use = y_arr[:mlen]
-                            bg = bgs.get(key)
-                            if bg is None:
-                                bg = self._apply_automatic_bg_new(x_use, y_use, deg=deg, pre_edge_percent=pre, do_plot=False)
-                            bg = np.asarray(bg, dtype=float).ravel()[:mlen]
-                            items_simple[key] = (x_use, y_use, bg)
-
-                        _match_slope = False
-                        try:
-                            scb = getattr(self, "chk_group_bg_slope", None)
-                            if scb is not None and scb.isEnabled() and scb.isChecked():
-                                _match_slope = True
-                        except Exception:
-                            _match_slope = False
-
-                        adjusted, msg = self._group_equalize_area_jump_and_zero_preedge(
-                            items_simple, pre=float(pre), match_preedge_slope=bool(_match_slope)
-                        )
-                        for k, (_x_u, _y_u, bg_u) in adjusted.items():
-                            bgs[k] = bg_u
-                        if msg:
-                            try:
-                                self.statusBar().showMessage(msg, 6000)
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-
+                drawn = self._drawn_spectra()
                 added = 0
-                skipped = 0
 
                 for key in visible_keys:
                     storage_key = key
-                    if storage_key in self.plotted_curves:
-                        skipped += 1
+                    line = drawn.get(key)
+                    if storage_key in self.plotted_curves or line is None or "##" not in key:
                         continue
 
-                    # Build x/y (normalized, bg-subtracted, post-normalized)
-                    parts = key.split("##", 1)
-                    if len(parts) != 2:
-                        skipped += 1
-                        continue
-                    abs_path, hdf5_path = parts
-                    parent = hdf5_path.rsplit("/", 1)[0] if "/" in hdf5_path else ""
-                    y_data = self.plot_data.get(key)
-                    if y_data is None:
-                        skipped += 1
-                        continue
-                    main_x, main_y = self._get_drawn_processed_xy(key)
+                    abs_path, hdf5_path = key.split("##", 1)
+                    main_x, main_y = line.get_data()
+                    state = getattr(line, "processing_state", {})
+                    norm_mode = state.get("post_normalization", "None")
                     difference = differences.get(key)
-                    if main_x is None or main_y is None:
-                        if difference is not None:
-                            skipped += 1
-                            continue
-                        x_data = lookup_energy(self, abs_path, parent, len(y_data), dataset_key=key)
-                        y_proc = processing.apply_normalization(self, abs_path, parent, y_data)
-                        mlen = min(len(x_data), len(y_proc))
-                        if mlen <= 1:
-                            skipped += 1
-                            continue
-                        main_x = np.asarray(x_data[:mlen], dtype=float).ravel()
-                        main_y = np.asarray(y_proc[:mlen], dtype=float).ravel()
-
-                        bg = bgs.get(key)
-                        if bg is None:
-                            bg = self._apply_automatic_bg_new(main_x, main_y, deg=deg, pre_edge_percent=pre, do_plot=False)
-                        bg = np.asarray(bg, dtype=float).ravel()[:mlen]
-                        subtracted = main_y - bg
-                        try:
-                            from .. import processing as _p
-
-                            subtracted = _p._proc_safe_post_normalize(self, main_x, subtracted, norm_mode)
-                        except Exception:
-                            pass
-                        main_y = subtracted
 
                     # Build label + metadata
                     source_file = abs_path
@@ -237,9 +93,10 @@ class RawPlotMixin:
                             metadata_parts.append(nm)
                     except Exception:
                         pass
-                    if self.chk_normalize.isChecked():
+                    if state.get("i0_applied"):
                         metadata_parts.append("normalized")
-                    metadata_parts.append("bg subtracted")
+                    if state.get("background_subtracted"):
+                        metadata_parts.append("bg subtracted")
                     if metadata_parts:
                         origin_label += " (" + ", ".join(metadata_parts) + ")"
 
@@ -258,6 +115,9 @@ class RawPlotMixin:
                             source_file="", post_normalization="None", difference=difference,
                             display_name=self.curve_display_names[key],
                         )
+                    paired_title = getattr(self, "_raw_pair_names", {}).get(key)
+                    if paired_title:
+                        self.plotted_metadata[storage_key]["reference_title"] = paired_title
 
                     # Add to plot + list
                     if storage_key not in self.custom_labels:
@@ -269,6 +129,7 @@ class RawPlotMixin:
                     _cl = str(_cl).strip() if isinstance(_cl, str) else ""
                     cdn = (getattr(self, "curve_display_names", {}) or {})
                     intrinsic_label = str(cdn.get(storage_key)).strip() if storage_key in cdn else ""
+                    intrinsic_label = intrinsic_label or getattr(self, "_raw_pair_names", {}).get(key, "")
                     display_label = intrinsic_label if intrinsic_label else origin_label
 
                     # Use an integer default linewidth (2) so users can return to the initial look
@@ -322,7 +183,7 @@ class RawPlotMixin:
                         pass
                     self.update_legend()
 
-                if skipped and added == 0:
+                if not added and drawn:
                     QMessageBox.warning(
                         self,
                         "Warning",
@@ -439,6 +300,9 @@ class RawPlotMixin:
             self.plotted_metadata[storage_key].update(
                 source_file="", difference=difference, display_name=self.curve_display_names[key],
             )
+        paired_title = getattr(self, "_raw_pair_names", {}).get(key)
+        if paired_title and storage_key == key:
+            self.plotted_metadata[storage_key]["reference_title"] = paired_title
 
         # Add the curve to the plotted axes and list
         if storage_key not in self.custom_labels:
@@ -450,6 +314,7 @@ class RawPlotMixin:
         _cl = str(_cl).strip() if isinstance(_cl, str) else ""
         cdn = (getattr(self, "curve_display_names", {}) or {})
         intrinsic_label = str(cdn.get(storage_key)).strip() if storage_key in cdn else ""
+        intrinsic_label = intrinsic_label or getattr(self, "_raw_pair_names", {}).get(key, "")
         display_label = intrinsic_label if intrinsic_label else origin_label
 
         # Use an integer default linewidth (2) so users can return to the initial look
@@ -553,6 +418,8 @@ class RawPlotMixin:
         m.setdefault("source_entry", str(m.get("source_entry", "") or ""))
         m.setdefault("post_normalization", str(m.get("post_normalization", "") or "None"))
         m["is_reference"] = bool(m.get("is_reference", True))
+        if m["is_reference"]:
+            m.setdefault("reference_title", str(label))
         m["is_imported"] = bool(m.get("is_imported", False))
         self.plotted_metadata[storage_key] = m
 
